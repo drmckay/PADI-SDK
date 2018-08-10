@@ -25,13 +25,16 @@
 #include "gpio_irq_ex_api.h"
 #include "i2c_ex_api.h"
 #include "i2s_api.h"
-#include "nfc_api.h"
 #include "serial_ex_api.h"
 #include "sleep_ex_api.h"
 #include "spi_ex_api.h"
 #include "sys_api.h"
 #include "wdt_api.h"
+
+#if CONFIG_PLATFORM_8195A
+#include "nfc_api.h"
 #include "ethernet_ex_api.h"
+#endif //CONFIG_PLATFORM_8195A
 
 #ifdef __cplusplus
 extern "C" {

@@ -781,4 +781,24 @@ static void vPortEnableVFP( void )
 
 #endif /* configASSERT_DEFINED */
 
+/*-----------------------------------------------------------*/
+void vApplicationIdleHook( void )
+{
+	/* Use the idle task to place the CPU into a low power mode.  Greater power
+	saving could be achieved by not including any demo tasks that never block. */
+}
+
+#include "diag.h"
+void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName )
+{
+	/* This function will be called if a task overflows its stack, if
+	configCHECK_FOR_STACK_OVERFLOW != 0.  It might be that the function
+	parameters have been corrupted, depending on the severity of the stack
+	overflow.  When this is the case pxCurrentTCB can be inspected in the
+	debugger to find the offending task. */
+	DiagPrintf("\n\r[%s] STACK OVERFLOW - TaskName(%s)\n\r", __FUNCTION__, pcTaskName);
+	for( ;; );
+}
+
+/*-----------------------------------------------------------*/
 

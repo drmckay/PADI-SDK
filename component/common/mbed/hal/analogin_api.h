@@ -1,4 +1,12 @@
-/* mbed Microcontroller Library
+/** mbed Microcontroller Library
+ ******************************************************************************
+ * @file    analogin_api.h
+ * @author 
+ * @version V1.0.0
+ * @brief   This file provides following mbed Analog_in API
+ ******************************************************************************
+ * @attention
+ *
  * Copyright (c) 2006-2013 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,22 +26,56 @@
 
 #include "device.h"
 
-#if DEVICE_ANALOGIN
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/** @addtogroup analog_in ANALOG_IN
+ *  @ingroup    hal
+ *  @brief      analog_in functions
+ *  @{
+ */
+
+///@name Ameba Common 
+///@{
+
 typedef struct analogin_s analogin_t;
 
-void     analogin_init    (analogin_t *obj, PinName pin);
-float    analogin_read    (analogin_t *obj);
+
+/**
+  * @brief  Initializes the ADC device, include clock/function/ADC registers.
+  * @param  obj: adc object define in application software.
+  * @param  pin: adc PinName according to pinmux spec.
+  * @retval none  
+  */
+void analogin_init(analogin_t *obj, PinName pin);
+
+/**
+  * @brief  Deinitializes the ADC device, include clock/function/ADC registers.
+  * @param  obj: adc object define in application software.
+  * @retval none  
+  */
+void analogin_deinit(analogin_t *obj);
+
+/**
+  * @brief  Reads data from the specified adc channel fifo.
+  * @param  obj: adc object define in application software.
+  * @retval : adc channel data(float) 
+  */
+float analogin_read(analogin_t *obj);
+
+/**
+  * @brief  Reads data from the specified adc channel fifo.
+  * @param  obj: adc object define in application software.
+  * @retval : 16bit adc channel data(int)
+  */
 uint16_t analogin_read_u16(analogin_t *obj);
+
+///@}
+/*\@}*/
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif
-
-#endif
+#endif//MBED_ANALOGIN_API_H

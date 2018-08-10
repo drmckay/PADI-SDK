@@ -194,7 +194,7 @@ typedef enum _I2S_SAMPLE_RATE_ {
     I2S_SR_48KHZ    =   0x05,	// /2
 	I2S_SR_96KHZ	=	0x06,	// x1, base 96kHz
 	I2S_SR_7p35KHZ	= 	0x10,
-	I2S_SR_11p02KHZ	= 	0x11,
+	I2S_SR_14p7KHZ	= 	0x11,
 	I2S_SR_22p05KHZ	= 	0x12,
 	I2S_SR_29p4KHZ	= 	0x13,
 	I2S_SR_44p1KHZ	= 	0x15,	

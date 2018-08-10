@@ -20,6 +20,8 @@
 #include "device_lock.h"
 #include <lwip_netconf.h>
 
+extern struct netif xnetif[NET_IF_NUM];
+
 write_reconnect_ptr p_write_reconnect_ptr;
 
 /*
@@ -74,7 +76,8 @@ int wlan_init_done_callback()
 	uint32_t    security_type;
 	uint8_t     pscan_config;
 	char key_id[2] = {0};
-
+	int ret;
+	
 	rtw_network_info_t wifi = {
 		{0},    // ssid
 		{0},    // bssid
@@ -84,15 +87,36 @@ int wlan_init_done_callback()
 		-1      // key id
 	};
 
+#if CONFIG_LWIP_LAYER
+	netif_set_up(&xnetif[0]);
+#endif
+
 #if CONFIG_AUTO_RECONNECT
 	//setup reconnection flag
-	wifi_set_autoreconnect(1);
+	if(wifi_set_autoreconnect(1) < 0){
+		return -1;
+	}
 #endif
 	data = (struct wlan_fast_reconnect *)rtw_zmalloc(sizeof(struct wlan_fast_reconnect));
 	if(data){
 		device_mutex_lock(RT_DEV_LOCK_FLASH);
 		flash_stream_read(&flash, FAST_RECONNECT_DATA, sizeof(struct wlan_fast_reconnect), (uint8_t *)data);
 		device_mutex_unlock(RT_DEV_LOCK_FLASH);
+
+		/* Check whether stored flash profile is empty */
+		struct wlan_fast_reconnect *empty_data;
+		empty_data = (struct wlan_fast_reconnect *)rtw_zmalloc(sizeof(struct wlan_fast_reconnect));
+		if(empty_data){
+			memset(empty_data, 0xff, sizeof(struct wlan_fast_reconnect));
+			if(memcmp(empty_data, data, sizeof(struct wlan_fast_reconnect)) == 0){
+				printf("[FAST_CONNECT] Fast connect profile is empty, abort fast connection\n");
+				rtw_mfree(data);
+				rtw_mfree(empty_data);
+				return 0;
+			}
+			rtw_mfree(empty_data);
+		}
+
 		memcpy(psk_essid, data->psk_essid, sizeof(data->psk_essid));
 		memcpy(psk_passphrase, data->psk_passphrase, sizeof(data->psk_passphrase));
 		memcpy(wpa_global_PSK, data->wpa_global_PSK, sizeof(data->wpa_global_PSK));
@@ -102,7 +126,11 @@ int wlan_init_done_callback()
 		security_type = data->security_type;
 		pscan_config = PSCAN_ENABLE | PSCAN_FAST_SURVEY;
 		//set partial scan for entering to listen beacon quickly
-		wifi_set_pscan_chan((uint8_t *)&channel, &pscan_config, 1);
+		ret = wifi_set_pscan_chan((uint8_t *)&channel, &pscan_config, 1);
+		if(ret < 0){
+			rtw_mfree(data);
+			return -1;
+		}
 
 		wifi.security_type = security_type;
 		//SSID
@@ -124,10 +152,12 @@ int wlan_init_done_callback()
 				break;
 		}
 
-		wifi_connect((char*)wifi.ssid.val, wifi.security_type, (char*)wifi.password, wifi.ssid.len,
+		ret = wifi_connect((char*)wifi.ssid.val, wifi.security_type, (char*)wifi.password, wifi.ssid.len,
 			wifi.password_len, wifi.key_id, NULL);
 
-		LwIP_DHCP(0, DHCP_START);
+		if(ret == RTW_SUCCESS){
+			LwIP_DHCP(0, DHCP_START);
+		}
 
 		rtw_mfree(data);
 	}

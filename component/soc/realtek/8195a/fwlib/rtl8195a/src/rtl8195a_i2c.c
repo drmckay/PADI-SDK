@@ -536,4 +536,46 @@ HalI2CEnableRtl8195a_Patch(
     }
     return HAL_OK;
 }
+
+HAL_Status
+HalI2CSetTarRtl8195a(
+    IN  VOID    *Data
+){
+    PHAL_I2C_INIT_DAT pHalI2CInitData = (PHAL_I2C_INIT_DAT)Data;
+    u8  I2CIdx  = pHalI2CInitData->I2CIdx;
+    u8  I2CEnBak = pHalI2CInitData->I2CEn;
+    u32 I2CTarBak;
+    
+    pHalI2CInitData->I2CEn = I2C_DISABLE;
+    HalI2CEnableRtl8195a_Patch(Data);
+
+    I2CTarBak = HAL_I2C_READ32(I2CIdx, REG_DW_I2C_IC_TAR);
+    I2CTarBak &= ~BIT_MASK_IC_TAR;
+    I2CTarBak |= BIT_CTRL_IC_TAR(pHalI2CInitData->I2CAckAddr);
+    HAL_I2C_WRITE32(I2CIdx, REG_DW_I2C_IC_TAR, I2CTarBak);
+
+    pHalI2CInitData->I2CEn = I2CEnBak;
+    return HalI2CEnableRtl8195a_Patch(Data);
+}
+
+HAL_Status
+HalI2CSetSarRtl8195a(
+    IN  VOID    *Data
+){
+    PHAL_I2C_INIT_DAT pHalI2CInitData = (PHAL_I2C_INIT_DAT)Data;
+    u8  I2CIdx  = pHalI2CInitData->I2CIdx;
+    u8  I2CEnBak = pHalI2CInitData->I2CEn;
+    u32 I2CSarBak;
+    
+    pHalI2CInitData->I2CEn = I2C_DISABLE;
+    HalI2CEnableRtl8195a_Patch(Data);
+
+    I2CSarBak = HAL_I2C_READ32(I2CIdx, REG_DW_I2C_IC_SAR);
+    I2CSarBak &= ~BIT_MASK_IC_SAR;
+    I2CSarBak |= BIT_CTRL_IC_SAR(pHalI2CInitData->I2CAckAddr);
+    HAL_I2C_WRITE32(I2CIdx, REG_DW_I2C_IC_SAR, I2CSarBak);
+
+    pHalI2CInitData->I2CEn = I2CEnBak;
+    return HalI2CEnableRtl8195a_Patch(Data);
+}
 #endif

@@ -35,6 +35,8 @@
 #include "polarssl/asn1.h"
 #include "polarssl/oid.h"
 
+#include "device_lock.h"
+
 #if defined(POLARSSL_RSA_C)
 #include "polarssl/rsa.h"
 #endif
@@ -1060,6 +1062,18 @@ int pk_parse_key( pk_context *pk,
     pem_init( &pem );
 
 #if defined(POLARSSL_RSA_C)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        ret = pem_read_buffer( &pem,
+                               "-----BEGIN RSA PRIVATE KEY-----",
+                               "-----END RSA PRIVATE KEY-----",
+                               key, pwd, pwdlen, &len );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    }
+    else
+#endif
     ret = pem_read_buffer( &pem,
                            "-----BEGIN RSA PRIVATE KEY-----",
                            "-----END RSA PRIVATE KEY-----",
@@ -1088,6 +1102,18 @@ int pk_parse_key( pk_context *pk,
 #endif /* POLARSSL_RSA_C */
 
 #if defined(POLARSSL_ECP_C)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        ret = pem_read_buffer( &pem,
+                               "-----BEGIN EC PRIVATE KEY-----",
+                               "-----END EC PRIVATE KEY-----",
+                               key, pwd, pwdlen, &len );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    }
+    else
+#endif
     ret = pem_read_buffer( &pem,
                            "-----BEGIN EC PRIVATE KEY-----",
                            "-----END EC PRIVATE KEY-----",
@@ -1115,6 +1141,18 @@ int pk_parse_key( pk_context *pk,
         return( ret );
 #endif /* POLARSSL_ECP_C */
 
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        ret = pem_read_buffer( &pem,
+                               "-----BEGIN PRIVATE KEY-----",
+                               "-----END PRIVATE KEY-----",
+                               key, NULL, 0, &len );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    }
+    else
+#endif
     ret = pem_read_buffer( &pem,
                            "-----BEGIN PRIVATE KEY-----",
                            "-----END PRIVATE KEY-----",
@@ -1133,6 +1171,18 @@ int pk_parse_key( pk_context *pk,
     else if( ret != POLARSSL_ERR_PEM_NO_HEADER_FOOTER_PRESENT )
         return( ret );
 
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        ret = pem_read_buffer( &pem,
+                               "-----BEGIN ENCRYPTED PRIVATE KEY-----",
+                               "-----END ENCRYPTED PRIVATE KEY-----",
+                               key, NULL, 0, &len );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    }
+    else
+#endif
     ret = pem_read_buffer( &pem,
                            "-----BEGIN ENCRYPTED PRIVATE KEY-----",
                            "-----END ENCRYPTED PRIVATE KEY-----",
@@ -1223,6 +1273,18 @@ int pk_parse_public_key( pk_context *ctx,
     pem_context pem;
 
     pem_init( &pem );
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        ret = pem_read_buffer( &pem,
+                "-----BEGIN PUBLIC KEY-----",
+                "-----END PUBLIC KEY-----",
+                key, NULL, 0, &len );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    }
+    else
+#endif
     ret = pem_read_buffer( &pem,
             "-----BEGIN PUBLIC KEY-----",
             "-----END PUBLIC KEY-----",

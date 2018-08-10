@@ -10,8 +10,6 @@
 #include <lwip/netif.h>
 #include "wifi/wifi_conf.h"
 #include <platform/platform_stdlib.h>
-#include <polarssl/ssl.h>
-#include <polarssl/memory.h>
 
 #define WLAN0_NAME "wlan0"
 #ifndef ENABLE
@@ -35,10 +33,9 @@ const unsigned char *eap_client_cert = NULL;
 const unsigned char *eap_client_key = NULL;
 char *eap_client_key_pwd = NULL;
 
-int max_buf_bio_size = SSL_BUFFER_LEN;
-
 void eap_eapol_recvd_hdl(char *buf, int buf_len, int flags, void* handler_user_data);
 void eap_eapol_start_hdl(char *buf, int buf_len, int flags, void* handler_user_data);
+static int connect_by_open_system(char *target_ssid);
 
 void set_eap_phase(unsigned char is_trigger_eap){
 	eap_phase = is_trigger_eap;
@@ -314,6 +311,13 @@ void eap_autoreconnect_hdl(u8 method_id){
 }
 
 // copy from ssl_client_ext.c
+#if CONFIG_USE_POLARSSL
+
+#include <polarssl/ssl.h>
+#include <polarssl/memory.h>
+
+int max_buf_bio_size = SSL_BUFFER_LEN;
+
 #if ENABLE_EAP_SSL_VERIFY_CLIENT
 static x509_crt* _cli_crt = NULL;
 static pk_context* _clikey_rsa = NULL;
@@ -448,3 +452,155 @@ int eap_cert_setup(ssl_context *ssl)
 #endif
 	return 0;
 }
+
+#elif CONFIG_USE_MBEDTLS
+
+#include <mbedtls/config.h>
+#include <mbedtls/platform.h>
+#include <mbedtls/ssl.h>
+#include <mbedtls/ssl_internal.h>
+
+int max_buf_bio_size = MBEDTLS_SSL_BUFFER_LEN;
+
+struct eap_tls{
+	void *ssl;
+	void *conf;
+	void *fd;
+};
+
+#if ENABLE_EAP_SSL_VERIFY_CLIENT
+static mbedtls_x509_crt* _cli_crt = NULL;
+static mbedtls_pk_context* _clikey_rsa = NULL;
+#endif
+
+#if ENABLE_EAP_SSL_VERIFY_SERVER
+static mbedtls_x509_crt* _ca_crt = NULL;
+
+static int eap_verify(void *data, mbedtls_x509_crt *crt, int depth, int *flags) 
+{
+
+	//char buf[1024];
+	((void) data);
+
+	printf("\nVerify requested for (Depth %d):\n", depth);
+	//mbedtls_x509_crt_info(buf, sizeof(buf) - 1, "", crt);
+	//printf("%s", buf);
+
+	if(((*flags) & MBEDTLS_X509_BADCERT_EXPIRED) != 0)
+		printf("server certificate has expired\n");
+
+	if(((*flags) & MBEDTLS_X509_BADCERT_REVOKED) != 0)
+		printf("  ! server certificate has been revoked\n");
+
+	if(((*flags) & MBEDTLS_X509_BADCERT_CN_MISMATCH) != 0)
+		printf("  ! CN mismatch\n");
+
+	if(((*flags) & MBEDTLS_X509_BADCERT_NOT_TRUSTED) != 0)
+		printf("  ! self-signed or not signed by a trusted CA\n");
+
+	if(((*flags) & MBEDTLS_X509_BADCRL_NOT_TRUSTED) != 0)
+		printf("  ! CRL not trusted\n");
+
+	if(((*flags) & MBEDTLS_X509_BADCRL_EXPIRED) != 0)
+		printf("  ! CRL expired\n");
+
+	if(((*flags) & MBEDTLS_X509_BADCERT_OTHER) != 0)
+		printf("  ! other (unknown) flag\n");
+
+	if((*flags) == 0)
+		printf("  Certificate verified without error flags\n");
+
+	return(0);
+}
+#endif
+
+int eap_cert_init(void)
+{
+#if ENABLE_EAP_SSL_VERIFY_CLIENT
+	if(eap_client_cert != NULL && eap_client_key != NULL){
+		_cli_crt = mbedtls_calloc(1, sizeof(mbedtls_x509_crt));
+	
+		if(_cli_crt)
+			mbedtls_x509_crt_init(_cli_crt);
+		else
+			return -1;
+
+		_clikey_rsa = mbedtls_calloc(1, sizeof(mbedtls_pk_context));
+	
+		if(_clikey_rsa)
+			mbedtls_pk_init(_clikey_rsa);
+		else
+			return -1;
+	}
+#endif
+#if ENABLE_EAP_SSL_VERIFY_SERVER
+	if(eap_ca_cert != NULL){
+		_ca_crt = mbedtls_calloc(1, sizeof(mbedtls_x509_crt));
+	
+		if(_ca_crt)
+			mbedtls_x509_crt_init(_ca_crt);
+		else
+			return -1;
+	}
+#endif
+	return 0;
+}
+
+void eap_client_cert_free(void)
+{
+#if ENABLE_EAP_SSL_VERIFY_CLIENT
+	if(eap_client_cert != NULL && eap_client_key != NULL){
+		if(_cli_crt) {
+			mbedtls_x509_crt_free(_cli_crt);
+			mbedtls_free(_cli_crt);
+			_cli_crt = NULL;
+		}
+
+		if(_clikey_rsa) {
+			mbedtls_pk_free(_clikey_rsa);
+			mbedtls_free(_clikey_rsa);
+			_clikey_rsa = NULL;
+		}
+	}
+#endif
+}
+
+void eap_server_cert_free(void)
+{
+#if ENABLE_EAP_SSL_VERIFY_SERVER
+	if(eap_ca_cert != NULL){
+		if(_ca_crt) {
+			mbedtls_x509_crt_free(_ca_crt);
+			mbedtls_free(_ca_crt);
+			_ca_crt = NULL;
+		}
+	}
+#endif
+}
+
+int eap_cert_setup(struct eap_tls *tls_context)
+{
+#if ENABLE_EAP_SSL_VERIFY_CLIENT
+	if(eap_client_cert != NULL && eap_client_key != NULL){
+		if(mbedtls_x509_crt_parse(_cli_crt, eap_client_cert, strlen(eap_client_cert)+1) != 0)
+			return -1;
+	
+		if(mbedtls_pk_parse_key(_clikey_rsa, eap_client_key, strlen(eap_client_key)+1, eap_client_key_pwd, strlen(eap_client_key_pwd)+1) != 0)
+			return -1;
+
+		mbedtls_ssl_conf_own_cert(tls_context->conf, _cli_crt, _clikey_rsa);
+	}
+#endif
+#if ENABLE_EAP_SSL_VERIFY_SERVER
+	if(eap_ca_cert != NULL){
+		if(mbedtls_x509_crt_parse(_ca_crt, eap_ca_cert, strlen(eap_ca_cert)+1) != 0)
+			return -1;
+		mbedtls_ssl_conf_ca_chain(tls_context->conf, _ca_crt, NULL);
+		mbedtls_ssl_conf_authmode(tls_context->conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+		mbedtls_ssl_conf_verify(tls_context->conf, eap_verify, NULL);
+	}
+#endif
+	return 0;
+}
+
+#endif /*CONFIG_USE_MBEDTLS*/

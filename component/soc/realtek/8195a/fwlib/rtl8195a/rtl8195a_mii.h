@@ -17,7 +17,7 @@
 
 #define MII_TX_DESC_NO					8
 #define MII_RX_DESC_NO					8
-#define MII_BUF_SIZE					1536
+#define MII_BUF_SIZE					1600
 #define MAX_FRAME_SIZE					1514
 
 

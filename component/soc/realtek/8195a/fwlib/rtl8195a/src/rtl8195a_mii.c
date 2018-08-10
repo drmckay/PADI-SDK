@@ -17,6 +17,7 @@
 
 volatile u8 *pTxDataBuf = NULL;
 volatile u8 *pRxDataBuf = NULL;
+volatile u32 ethernet_unplug = 0;
 
 #if 0 
 volatile TX_DESC_FMT TxDesc[MII_TX_DESC_NO];
@@ -88,7 +89,7 @@ VOID Mii_ISR(
 		{
 			pEthAdapter->CallBack(ETH_TXDONE, 0);
 		}
-    }
+	}
 
 	if((RegValue & ISR_LINKCHG) && ((pEthAdapter->InterruptMask) & IMR_LINKCHG))
 	{
@@ -144,13 +145,13 @@ HalMiiInitIrqRtl8195a(
 )
 {
 	PHAL_ETHER_ADAPTER pEthAdapter = (PHAL_ETHER_ADAPTER) Data;
-	PIRQ_HANDLE	pMiiIrqHandle = &(pEthAdapter->IrqHandle);
+	PIRQ_HANDLE pMiiIrqHandle = &(pEthAdapter->IrqHandle);
 
 
 	if(pEthAdapter == NULL)
 		DBG_MII_ERR("pEthAdapter is NULL !!\n");
 
-	pMiiIrqHandle->Data	 = (u32) pEthAdapter;
+	pMiiIrqHandle->Data  = (u32) pEthAdapter;
 	pMiiIrqHandle->IrqNum	 = GMAC_IRQ;
 	pMiiIrqHandle->IrqFun	 = (IRQ_FUN) Mii_ISR;
 	pMiiIrqHandle->Priority = 6;
@@ -175,8 +176,8 @@ HalMiiDeInitIrqRtl8195a(
 	HAL_MII_WRITE32(REG_MII_ISRIMR, ISR_CLR_ALL);
 
 	MiiIrqHandle.Data	 = (u32) pEthAdapter;
-	MiiIrqHandle.IrqNum	 = GMAC_IRQ;
-	MiiIrqHandle.IrqFun	 = (IRQ_FUN) Mii_ISR;
+	MiiIrqHandle.IrqNum  = GMAC_IRQ;
+	MiiIrqHandle.IrqFun  = (IRQ_FUN) Mii_ISR;
 	MiiIrqHandle.Priority = 6;
 	InterruptDis(&MiiIrqHandle);
 	InterruptUnRegister(&MiiIrqHandle);
@@ -185,7 +186,7 @@ HalMiiDeInitIrqRtl8195a(
 #if 0
 void Mii_DmaDone_ISR(u32 id)
 {
-    isDmaDone = 1;
+	isDmaDone = 1;
 }
 #endif
 
@@ -278,8 +279,8 @@ HalMiiInitRtl8195a(
 	HAL_MII_WRITE32(REG_MII_IDR0, (macAddr[0] << 24) | (macAddr[1] << 16) | (macAddr[2] << 8) | macAddr[3]);
 	HAL_MII_WRITE32(REG_MII_IDR4, (macAddr[4] << 24) | (macAddr[5] << 16));
 
-	HAL_MII_WRITE32(REG_MII_RC, RC_AER | RC_AR | RC_AB | RC_AM | RC_APM | RC_AAP);  // Accept error/runt/broadcast/multicast, etc.
-	HAL_MII_WRITE32(REG_MII_COM, (HAL_MII_READ32(REG_MII_COM) | COM_RXJUMBO));  // Support jumbo packet receiving
+	HAL_MII_WRITE32(REG_MII_RC, RC_AER | RC_AR | RC_AB | RC_AM | RC_APM | RC_AAP);	// Accept error/runt/broadcast/multicast, etc.
+	HAL_MII_WRITE32(REG_MII_COM, (HAL_MII_READ32(REG_MII_COM) | COM_RXJUMBO));	// Support jumbo packet receiving
 	HAL_MII_WRITE32(REG_MII_ETNRXCPU1, 0x01010100);
 
 	TxDesc = (PTX_DESC_FMT)(pEthAdapter->TxDescAddr);
@@ -308,14 +309,19 @@ HalMiiInitRtl8195a(
 		if(!(ret & PHY_SW_RESET))
 			break;
 	}
-	/* Auto-Negotiation */
-	HalMiiForceLinkRtl8195a(-1, -1);
-
+	HalDelayUs(2500000);
+	
 	HalMiiInitIrqRtl8195a((VOID*)(&HalEtherAdp));
 	HAL_WRITE32(0xE000E100, 0x0, 0x00040000);  // enable external interrupt[18] (GMAC)
 	/* ISR & IMR */
 	HalEtherAdp.InterruptMask = IMR_LINKCHG | IMR_TXOK | IMR_RER_OVF | IMR_RXOK | ISR_CLR_ALL;
 	HAL_MII_WRITE32(REG_MII_ISRIMR, HalEtherAdp.InterruptMask);
+
+	if(HalMiiGetLinkStatusRtl8195a()) {
+		/* Auto-Negotiation */
+		HalMiiForceLinkRtl8195a(-1, -1);
+	}
+	
 	#if 0
 	/* Init GDMA */
 	gdmaObj.GdmaIrqHandle.IrqFun = (IRQ_FUN)Mii_DmaDone_ISR;
@@ -509,7 +515,7 @@ HalMiiReadDataRtl8195a(
 	u32 read_idx = RxDescRdPtr;
 
 
-	if((Data == NULL) || (Size == 0) || (Size > 1518))
+	if((Data == NULL) || (Size == 0) || (Size > 1536))
 	{
 		DBG_MII_ERR("Wrong params\n");
 		return 0;
@@ -519,7 +525,7 @@ HalMiiReadDataRtl8195a(
 	_memcpy((void*)Data, (void*)(RxDesc[read_idx].addr + 2), Size);
 	#else
 	isDmaDone = 0;
-	HalGdmaMemCpy(&gdmaObj, (void*)Data, (void*)(RxDesc[read_idx].addr + 2), Size);	
+	HalGdmaMemCpy(&gdmaObj, (void*)Data, (void*)(RxDesc[read_idx].addr + 2), Size); 
 	while (isDmaDone == 0);
 	#endif
 	
@@ -549,7 +555,7 @@ HalMiiGetMacAddressRtl8195a(
 
 // To do: Get info. from Flash or Efuse
 	ptr = Addr;
-	*(ptr)   = 0x12;
+	*(ptr)	 = 0x12;
 	*(ptr+1) = 0x34;
 	*(ptr+2) = 0x56;
 	*(ptr+3) = 0x78;
@@ -726,6 +732,7 @@ HalMiiForceLinkRtl8195a(
 )
 {
 	u16 ret;
+	u16 i = 0;
 
 
 	/* Switch to Page 0 */
@@ -754,11 +761,17 @@ HalMiiForceLinkRtl8195a(
 		while(1)
 		{
 			ret = HalMiiRwPhyRegRtl8195a(0, 1, 0);
-			if(ret & PHY_NWAY_COMPLETE)
+			if(ret & PHY_NWAY_COMPLETE){
+				ethernet_unplug = 0;
 				break;
+			}
+			else
+				RtlMsleepOS(100);
+			if((i++ >= 20) && (ethernet_unplug == 0))
+				ethernet_unplug = 1;
 		}
 		DBG_MII_INFO("Auto-negotiation is completed...\n");
-	}
+	}	
 
 	/* Wait until link is up */
 	while(1)
@@ -791,12 +804,11 @@ HalMiiForceLinkRtl8195a(
 }
 #endif
 
-
 #ifdef CONFIG_MII_VERIFY
 VOID MiiIrqHandle (IN VOID *Data);
 
 VOID MiiIrqHandle (IN VOID *Data) {
-    u32 RegValue = HalMiiGmacGetInterruptStatusRtl8195a();
+	u32 RegValue = HalMiiGmacGetInterruptStatusRtl8195a();
 	extern volatile u8 isRxOK;
 	extern volatile u8 isTxOK;
 	extern volatile u8 RxIntCnt;
@@ -812,7 +824,7 @@ VOID MiiIrqHandle (IN VOID *Data) {
 	if(RegValue & GMAC_ISR_TOK_TI) {
 		HalMiiGmacClearInterruptStatusRtl8195a(0x00410040);
 		isTxOK = 1;
-    }
+	}
 }
 
 
@@ -822,15 +834,15 @@ VOID MiiIrqHandle (IN VOID *Data) {
  * MII Initialize.
  *
  * Initialization Steps:
- *   I. Rtl8195A Board Configurations:
- *     1. MII Function Enable & AHB mux
+ *	 I. Rtl8195A Board Configurations:
+ *	   1. MII Function Enable & AHB mux
  *
  * @return runtime status value.
  */
 BOOL
 HalMiiGmacInitRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
 	u32 RegValue;
 
@@ -861,7 +873,7 @@ HalMiiGmacInitRtl8195a(
 	HAL_WRITE32(SYSTEM_CTRL_BASE, 0x74, (RegValue | 0x00003000));
 
 	/* 6. AHB mux: select MII (214, 13) */
-    	RegValue = HAL_READ32(PERI_ON_BASE, REG_SOC_HCI_COM_FUNC_EN);
+		RegValue = HAL_READ32(PERI_ON_BASE, REG_SOC_HCI_COM_FUNC_EN);
 	RegValue |= BIT13;
 	HAL_WRITE32(PERI_ON_BASE, REG_SOC_HCI_COM_FUNC_EN, RegValue);
 
@@ -886,154 +898,154 @@ HalMiiGmacInitRtl8195a(
 
 BOOL
 HalMiiGmacResetRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
 	HAL_MII_WRITE32(REG_RTL_MII_CR, (HAL_MII_READ32(REG_RTL_MII_CR) | BIT0));
 
-    return _TRUE;
+	return _TRUE;
 }
 
 
 BOOL
 HalMiiGmacEnablePhyModeRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    return _TRUE;
+	return _TRUE;
 }
 
 
 u32
 HalMiiGmacXmitRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    return 0;
+	return 0;
 }
 
 
 VOID
 HalMiiGmacCleanTxRingRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
 }
 
 
 VOID
 HalMiiGmacFillTxInfoRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    PMII_ADAPTER pMiiAdapter = (PMII_ADAPTER) Data;
-    PTX_INFO pTx_Info = pMiiAdapter->pTx_Info;
-    VOID* TxBuffer  = pMiiAdapter->TxBuffer;
+	PMII_ADAPTER pMiiAdapter = (PMII_ADAPTER) Data;
+	PTX_INFO pTx_Info = pMiiAdapter->pTx_Info;
+	VOID* TxBuffer	= pMiiAdapter->TxBuffer;
 
 
-    pTx_Info->opts1.dw = 0xBC8001FE;
-    /* pTx_Info->opts1.dw = 0xBC800080; // size: 128 */
+	pTx_Info->opts1.dw = 0xBC8001FE;
+	/* pTx_Info->opts1.dw = 0xBC800080; // size: 128 */
 
-    pTx_Info->addr     = (u32)TxBuffer;
-    pTx_Info->opts2.dw = 0x0400279F;
-    pTx_Info->opts3.dw = 0x00000000;
-    /* pTx_Info->opts4.dw = 0x57800000; */
-    pTx_Info->opts4.dw = 0x1FE00000;
+	pTx_Info->addr	   = (u32)TxBuffer;
+	pTx_Info->opts2.dw = 0x0400279F;
+	pTx_Info->opts3.dw = 0x00000000;
+	/* pTx_Info->opts4.dw = 0x57800000; */
+	pTx_Info->opts4.dw = 0x1FE00000;
 
-    HAL_MII_WRITE32(REG_RTL_MII_TXFDP1, pTx_Info);
+	HAL_MII_WRITE32(REG_RTL_MII_TXFDP1, pTx_Info);
 }
 
 
 VOID
 HalMiiGmacFillRxInfoRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    PMII_ADAPTER pMiiAdapter = (PMII_ADAPTER) Data;
-    PRX_INFO pRx_Info = pMiiAdapter->pRx_Info;
-    VOID* RxBuffer    = pMiiAdapter->RxBuffer;
+	PMII_ADAPTER pMiiAdapter = (PMII_ADAPTER) Data;
+	PRX_INFO pRx_Info = pMiiAdapter->pRx_Info;
+	VOID* RxBuffer	  = pMiiAdapter->RxBuffer;
 
 
-    /* pRx_Info->opts1.dw = 0x80000200; //Data Length: 4095(FFF), 512(200) */
-    pRx_Info->opts1.dw = 0x800001FC; //Data Length: 4095(FFF), 512(200)
-    /* pRx_Info->opts1.dw = 0x8000007F; */
+	/* pRx_Info->opts1.dw = 0x80000200; //Data Length: 4095(FFF), 512(200) */
+	pRx_Info->opts1.dw = 0x800001FC; //Data Length: 4095(FFF), 512(200)
+	/* pRx_Info->opts1.dw = 0x8000007F; */
 
-    pRx_Info->addr     = (u32)RxBuffer;
-    pRx_Info->opts2.dw = 0x00000000;
-    pRx_Info->opts3.dw = 0x00000000;
+	pRx_Info->addr	   = (u32)RxBuffer;
+	pRx_Info->opts2.dw = 0x00000000;
+	pRx_Info->opts3.dw = 0x00000000;
 
-    HAL_MII_WRITE32(REG_RTL_MII_RXFDP1, pRx_Info);
+	HAL_MII_WRITE32(REG_RTL_MII_RXFDP1, pRx_Info);
 }
 
 
 VOID
 HalMiiGmacTxRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    u32 RegValue;
+	u32 RegValue;
 
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
-    RegValue |= BIT_IOCMD_TXENABLE(1);
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD, RegValue);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
+	RegValue |= BIT_IOCMD_TXENABLE(1);
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD, RegValue);
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
-    RegValue |= BIT_IOCMD_FIRST_DMATX_ENABLE(1);
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD, RegValue);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
+	RegValue |= BIT_IOCMD_FIRST_DMATX_ENABLE(1);
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD, RegValue);
 }
 
 
 VOID
 HalMiiGmacRxRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    u32 RegValue;
+	u32 RegValue;
 
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_TCR);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_TCR);
 
-    HAL_MII_WRITE32(REG_RTL_MII_TCR, 0x00000D00);  // loopback R2T mode
+	HAL_MII_WRITE32(REG_RTL_MII_TCR, 0x00000D00);  // loopback R2T mode
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_RCR);
-    HAL_MII_WRITE32(REG_RTL_MII_RCR, 0x0000007F);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_RCR);
+	HAL_MII_WRITE32(REG_RTL_MII_RCR, 0x0000007F);
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_ETNRXCPU1);
-    HAL_MII_WRITE32(REG_RTL_MII_ETNRXCPU1, 0x1F0A0F00);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_ETNRXCPU1);
+	HAL_MII_WRITE32(REG_RTL_MII_ETNRXCPU1, 0x1F0A0F00);
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_RX_PSE1);
-    HAL_MII_WRITE32(REG_RTL_MII_RX_PSE1, 0x00000022);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_RX_PSE1);
+	HAL_MII_WRITE32(REG_RTL_MII_RX_PSE1, 0x00000022);
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD1);
-    RegValue |= BIT_IOCMD1_FIRST_DMARX_ENABLE(1);
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD1, RegValue);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD1);
+	RegValue |= BIT_IOCMD1_FIRST_DMARX_ENABLE(1);
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD1, RegValue);
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
-    RegValue |= BIT_IOCMD_RXENABLE(1);
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD, RegValue);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
+	RegValue |= BIT_IOCMD_RXENABLE(1);
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD, RegValue);
 }
 
 
 VOID
 HalMiiGmacSetDefaultEthIoCmdRtl8195a(
-        IN VOID *Data
-        )
+		IN VOID *Data
+		)
 {
-    u32 RegValue;
+	u32 RegValue;
 
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD, CMD_CONFIG);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD);
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD, CMD_CONFIG);
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD1);
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD1, CMD1_CONFIG);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD1);
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD1, CMD1_CONFIG);
 
-    //2014-04-29 yclin (disable 0x40051438[27] r_en_precise_dma) {
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD1);
-    RegValue = RegValue & 0xF7FFFFFF;
-    HAL_MII_WRITE32(REG_RTL_MII_IOCMD1, RegValue);
-    // }
+	//2014-04-29 yclin (disable 0x40051438[27] r_en_precise_dma) {
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IOCMD1);
+	RegValue = RegValue & 0xF7FFFFFF;
+	HAL_MII_WRITE32(REG_RTL_MII_IOCMD1, RegValue);
+	// }
 }
 
 
@@ -1057,25 +1069,25 @@ HalMiiGmacInitIrqRtl8195a(
 
 u32
 HalMiiGmacGetInterruptStatusRtl8195a(
-        VOID
-        )
+		VOID
+		)
 {
-    u32 RegValue;
+	u32 RegValue;
 
 
-    RegValue = HAL_MII_READ32(REG_RTL_MII_IMRISR);
+	RegValue = HAL_MII_READ32(REG_RTL_MII_IMRISR);
 
-    return RegValue;
+	return RegValue;
 }
 
 
 VOID
 HalMiiGmacClearInterruptStatusRtl8195a(
-        u32 IsrStatus
-        )
+		u32 IsrStatus
+		)
 {
-    HAL_MII_WRITE32(REG_RTL_MII_IMRISR, IsrStatus);
+	HAL_MII_WRITE32(REG_RTL_MII_IMRISR, IsrStatus);
 }
-#endif  // #ifdef CONFIG_MII_VERIFY
+#endif	// #ifdef CONFIG_MII_VERIFY
 
 

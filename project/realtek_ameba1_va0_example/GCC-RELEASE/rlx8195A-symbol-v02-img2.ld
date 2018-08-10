@@ -139,6 +139,7 @@ SECTIONS
   {
     __data_start__ = .;
     *(.data*)
+    . = ALIGN(4);
     __data_end__ = .;
   	__ram_image2_text_end__ = .;    
   } > BD_RAM
@@ -180,6 +181,7 @@ SECTIONS
     *(.p2p.text*)
     *(.wps.text*)
     *(.websocket.text*)
+    *(.mdns.text*)
   } > SDRAM_RAM
 
   .sdr_rodata :
@@ -188,14 +190,19 @@ SECTIONS
     *(.p2p.rodata*)
     *(.wps.rodata*)
     *(.websocket.rodata*)
+    *(.mdns.rodata*)
   } > SDRAM_RAM
 
   .sdr_data : 
   {
     *(.sdram.data*)
     *(.p2p.data*)
-    *(.wps.data*)
+    *(.wps.data*)    
     *(.websocket.data*)
+    *(.mdns.data*)
+    . = ALIGN(256);
+    *(.fpb.remap*)
+    . = ALIGN(4);
     __sdram_data_end__ = .;
   } > SDRAM_RAM
 
@@ -206,6 +213,7 @@ SECTIONS
     *(.p2p.bss*)
     *(.wps.bss*)
     *(.websocket.bss*)
+    *(.mdns.bss*)
     __sdram_bss_end__ = .;
   } > SDRAM_RAM
 

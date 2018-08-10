@@ -9,7 +9,6 @@
 #define snprintf	DiagSnPrintf
 
 #define strstr		__rtl_strstr
-#define vsnprintf	__rtl_vfprintf_r
 #define memmove		__rtl_memmove
 
 /* these functions will be move to rom libc */

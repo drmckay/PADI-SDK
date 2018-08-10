@@ -3,7 +3,23 @@
 #include "uart_ymodem.h"
 #include "osdep_service.h"
 #include "PinNames.h"
+#include "FreeRTOS.h"
+#include "task.h"
+#include "semphr.h"
 
+#if defined(CONFIG_PLATFORM_8711B)
+extern const update_file_img_id OtaImgId[2];
+u8 uart_signature[9] = {0};
+update_ota_target_hdr OtaTargetHdr;
+static u32 flash_write_len = 0;
+static u32 flash_offset = 0x0;
+static u32 file_offset = 0;
+static u32 IMAGE_OFFSET = 0;
+static u32 IMAGE_LEN = 0;
+static int hd_flags = 0;
+static int sig_flags = 0;	
+static int sig_cnt = 0;
+#endif
 /*****************************************************************************************
 *                                uart basic functions                                    *
 ******************************************************************************************/
@@ -13,7 +29,8 @@
 	//u8 ch = 0;
 	if(event == RxIrq) {
 		if(ptr->uart_recv_index == 0){
-			RtlUpSemaFromISR(&ptr->uart_rx_sema);//up uart rx semaphore
+			//RtlUpSemaFromISR(&ptr->uart_rx_sema);//up uart rx semaphore
+			rtw_up_sema_from_isr(&ptr->uart_rx_sema);//up uart rx semaphore
 		}
 		if(ptr->uart_recv_index == RCV_BUF_SIZE)
 			ptr->uart_recv_index = 0;
@@ -42,7 +59,8 @@ void uart_init(uart_ymodem_t *ptr)
 	serial_irq_set(&ptr->sobj, RxIrq, 1);
 	serial_irq_set(&ptr->sobj, TxIrq, 1);
 	
-	RtlInitSema(&ptr->uart_rx_sema, 0);
+	//RtlInitSema(&ptr->uart_rx_sema, 0);	
+	rtw_init_sema(&ptr->uart_rx_sema, 0);
 }
 void uart_sendbyte(uart_ymodem_t *ptr,u8 sendc )
 {
@@ -128,7 +146,19 @@ void uart_ymodem_init(uart_ymodem_t *uart_ymodem_ptr)
 	uart_ymodem_ptr->uart_recv_buf_index = 0;
 	uart_ymodem_ptr->uart_recv_index = 0;
 	uart_ymodem_ptr->image_address = IMAGE_TWO;
-
+	
+#if defined(CONFIG_PLATFORM_8711B)
+	rtw_memset(uart_signature, 0, sizeof(uart_signature));
+	rtw_memset(&OtaTargetHdr, 0, sizeof(OtaTargetHdr));
+	flash_write_len = 0;
+	flash_offset = 0x0;
+	file_offset = 0;
+	IMAGE_OFFSET = 0;
+	IMAGE_LEN = 0;
+	hd_flags = 0;
+	sig_flags = 0;	
+	sig_cnt = 0;
+#endif
 //	return uart_ymodem_ptr;
 }
 
@@ -136,13 +166,15 @@ void uart_ymodem_deinit(uart_ymodem_t *ptr)
 {
 
 	/* Free uart_rx-sema */
-	RtlFreeSema(&ptr->uart_rx_sema);
+	//RtlFreeSema(&ptr->uart_rx_sema);	
+	rtw_free_sema(&ptr->uart_rx_sema);
 	
 	/* Free serial */
 	serial_free(&ptr->sobj);
 
 	/* Free uart_ymodem_t */
-	RtlMfree((u8 *)ptr,sizeof(uart_ymodem_t));
+	//RtlMfree((u8 *)ptr,sizeof(uart_ymodem_t));	
+	rtw_mfree((u8 *)ptr,sizeof(uart_ymodem_t));
 }
 
 #if CONFIG_CALC_FILE_SIZE
@@ -248,40 +280,6 @@ int start_next_round(uart_ymodem_t *ptr)
 			}
 		}
 	}
-	return ret;
-}
-int data_write_to_flash(uart_ymodem_t *ptr)
-{
-	int ret = 0;
-//	uint32_t update_image_address = IMAGE_TWO;
-	static int offset = 0x0;
-	u32 data;
-	static int flags = 1;	//write update image header only once
-//  int file_blk_size = 0
-	
-	flash_read_word(&ptr->flash, OFFSET_DATA, &data);
-//	file_blk_size = ((ptr->filelen - 1)/4096) + 1;
-	if(data == ~0x0){
-		flash_write_word(&ptr->flash, OFFSET_DATA, ptr->image_address);
-	}
-//	printf("image_address get from flash =  0x%x\n\r",ptr->image_address);
-	//erase flash where to be written,since ymodem blk size can be 128 or 1024,so, erase once when gather 4096
-	if(offset ==0 || (offset % 4096)==0){
-		flash_erase_sector(&ptr->flash, ptr->image_address + offset);
-	}
-	//write to flash
-	//write back image size and address
-	if(!flags){
-		flash_write_word(&ptr->flash, ptr->image_address, ptr->filelen);
-		flash_write_word(&ptr->flash, ptr->image_address+4,0x10004000);
-		flags = 1;
-	}
-//	ymodem_flashwrite(update_image_address + offset, ptr->uart_rcv_buf, ptr->len);
-	device_mutex_lock(RT_DEV_LOCK_FLASH);
-	flash_stream_write(&ptr->flash, ptr->image_address+offset, ptr->len, ptr->uart_rcv_buf);
-	device_mutex_unlock(RT_DEV_LOCK_FLASH);
-	offset += ptr->len;
-	
 	return ret;
 }
 int block_num_check(uart_ymodem_t *ptr)
@@ -416,20 +414,178 @@ void flash_dump_data(uart_ymodem_t *ptr)
 	}
 }
 #endif
-#if AUTO_REBOOT
-void auto_reboot(void)
-{
-	// Set processor clock to default before system reset
-	HAL_WRITE32(SYSTEM_CTRL_BASE, 0x14, 0x00000021);
-	osDelay(100);
 
-	// Cortex-M3 SCB->AIRCR
-	HAL_WRITE32(0xE000ED00, 0x0C, (0x5FA << 16) |                             // VECTKEY
-	                              (HAL_READ32(0xE000ED00, 0x0C) & (7 << 8)) | // PRIGROUP
-	                              (1 << 2));                                  // SYSRESETREQ
-	while(1) osDelay(1000);
+#if defined(CONFIG_PLATFORM_8711B)
+int data_write_to_flash(uart_ymodem_t *ptr)
+{
+	int ret = 0;
+	u8 *pImgId = NULL;
+	u32 buf_offset = 0;
+	u32 write_len = 0;
+	uint32_t uart_ota_target_index = OTA_INDEX_2;
+
+	if(!hd_flags){
+		/* check OTA index we should update */
+		if (ota_get_cur_index() == OTA_INDEX_1) {
+			uart_ota_target_index = OTA_INDEX_2;
+			printf("OTA2 address space will be upgraded\n");
+		} else {
+			uart_ota_target_index = OTA_INDEX_1;
+			printf("OTA1 address space will be upgraded\n");
+		}		
+		pImgId = (u8 *)&OtaImgId[uart_ota_target_index];
+		
+		/* -----step3: parse firmware file header and get the target OTA image header-----*/
+		/* parse firmware file header and get the target OTA image header-----*/
+		if(!get_ota_tartget_header(ptr->uart_rcv_buf, ptr->len, &OtaTargetHdr, pImgId)){
+			printf("\n\rget OTA header failed\n");
+			return 1;
+		}
+
+		/*get new image addr and check new address validity*/
+		if(!get_ota_address(uart_ota_target_index, &ptr->image_address, &OtaTargetHdr)){
+			printf("\n\rget OTA address failed\n");
+			return 1;
+		}
+
+		/*get new image length from the firmware header*/
+		IMAGE_LEN = OtaTargetHdr.FileImgHdr.ImgLen;
+
+		/*-------------------step4: erase flash space for new firmware--------------*/
+		/*erase flash space new OTA image */
+		erase_ota_target_flash(ptr->image_address, IMAGE_LEN);
+		/*erase flash space for new RDP image*/
+		if(OtaTargetHdr.RdpStatus == ENABLE) {
+			device_mutex_lock(RT_DEV_LOCK_FLASH);
+			flash_erase_sector(&ptr->flash, RDP_FLASH_ADDR - SPI_FLASH_BASE);
+			device_mutex_unlock(RT_DEV_LOCK_FLASH);
+		}
+
+		IMAGE_OFFSET = OtaTargetHdr.FileImgHdr.Offset;
+		hd_flags = 1;
+	}
+	//printf("\n\r file_offset = %d ptr->len = %d", file_offset, ptr->len);
+
+	/*---------step5: download new firmware from server and write it to flash--------*/
+	if(IMAGE_OFFSET >= file_offset && IMAGE_OFFSET < file_offset + ptr->len){
+		buf_offset = IMAGE_OFFSET - file_offset;
+		write_len = ptr->len - buf_offset;
+		file_offset += ptr->len;
+		if(!sig_flags){
+			if(write_len < 8){
+				sig_cnt = write_len;
+			}else{
+				sig_cnt = 8;
+				sig_flags = 1;
+			}
+			_memcpy(uart_signature, ptr->uart_rcv_buf + buf_offset, sig_cnt);
+			buf_offset += sig_cnt;
+			flash_offset += sig_cnt;
+			write_len -= sig_cnt;
+			if(!write_len)
+				return ret;
+		}
+	}else if(IMAGE_OFFSET < file_offset && IMAGE_OFFSET + IMAGE_LEN >= file_offset + ptr->len){
+		buf_offset = 0;
+		write_len = ptr->len;
+		file_offset += ptr->len;
+		if(!sig_flags){
+			_memcpy(uart_signature + sig_cnt, ptr->uart_rcv_buf + buf_offset, 8 - sig_cnt);
+			sig_cnt = 8 - sig_cnt;
+			buf_offset += sig_cnt;
+			flash_offset += sig_cnt;
+			write_len -= sig_cnt;
+			sig_flags = 1;
+		}
+	}else if(IMAGE_OFFSET + IMAGE_LEN > file_offset && IMAGE_OFFSET + IMAGE_LEN < file_offset + ptr->len){
+		buf_offset = 0;
+		write_len = IMAGE_OFFSET + IMAGE_LEN - file_offset;
+		file_offset += ptr->len;
+	}else{
+		file_offset += ptr->len;
+		return ret;	
+	}
+
+	device_mutex_lock(RT_DEV_LOCK_FLASH);
+	if(flash_stream_write(&ptr->flash, ptr->image_address + flash_offset - SPI_FLASH_BASE, write_len, ptr->uart_rcv_buf + buf_offset) < 0){
+		printf("\n\r[%s] Write sector failed", __FUNCTION__);
+		device_mutex_unlock(RT_DEV_LOCK_FLASH);
+		return 1;
+	}
+	device_mutex_unlock(RT_DEV_LOCK_FLASH);
+	flash_offset += write_len;
+	flash_write_len += write_len;
+	return ret;	
 }
-#endif
+int set_signature(uart_ymodem_t *ptr)
+{
+	int ret = 1 ;
+	uint32_t uart_ota_target_index = OTA_INDEX_2;
+	
+	if(ptr->image_address == OTA1_ADDR)
+		uart_ota_target_index = OTA_INDEX_1;
+	else
+		uart_ota_target_index = OTA_INDEX_2;
+	
+	if((flash_write_len <= 0) || (flash_write_len != (OtaTargetHdr.FileImgHdr.ImgLen - 8))) {
+		printf("\n\rdownload new firmware failed\n");
+		return 1;
+	}
+	printf("\n\r[%s] %s\n", __FUNCTION__, uart_signature);
+	 /*-------------step6: verify checksum and update signature-----------------*/
+	if(verify_ota_checksum(ptr->image_address, flash_write_len, uart_signature, &OtaTargetHdr)){
+		if(!change_ota_signature(ptr->image_address, uart_signature, uart_ota_target_index)) {
+			printf("\n%s: change signature failed\n", __FUNCTION__);
+			return 1;
+		}
+		ret = 0;
+	} else {
+		/*if checksum error, clear the signature zone which has been 
+		written in flash in case of boot from the wrong firmware*/
+		#if 1
+		device_mutex_lock(RT_DEV_LOCK_FLASH);
+		flash_erase_sector(&ptr->flash, ptr->image_address - SPI_FLASH_BASE);
+		device_mutex_unlock(RT_DEV_LOCK_FLASH);
+		#endif
+	}
+	return ret;
+}
+
+#else
+int data_write_to_flash(uart_ymodem_t *ptr)
+{
+	int ret = 0;
+//	uint32_t update_image_address = IMAGE_TWO;
+	static int offset = 0x0;
+	u32 data;
+	static int flags = 1;	//write update image header only once
+//  int file_blk_size = 0
+	
+	flash_read_word(&ptr->flash, OFFSET_DATA, &data);
+//	file_blk_size = ((ptr->filelen - 1)/4096) + 1;
+	if(data == ~0x0){
+		flash_write_word(&ptr->flash, OFFSET_DATA, ptr->image_address);
+	}
+//	printf("image_address get from flash =  0x%x\n\r",ptr->image_address);
+	//erase flash where to be written,since ymodem blk size can be 128 or 1024,so, erase once when gather 4096
+	if(offset ==0 || (offset % 4096)==0){
+		flash_erase_sector(&ptr->flash, ptr->image_address + offset);
+	}
+	//write to flash
+	//write back image size and address
+	if(!flags){
+		flash_write_word(&ptr->flash, ptr->image_address, ptr->filelen);
+		flash_write_word(&ptr->flash, ptr->image_address+4,0x10004000);
+		flags = 1;
+	}
+//	ymodem_flashwrite(update_image_address + offset, ptr->uart_rcv_buf, ptr->len);
+	device_mutex_lock(RT_DEV_LOCK_FLASH);
+	flash_stream_write(&ptr->flash, ptr->image_address+offset, ptr->len, ptr->uart_rcv_buf);
+	device_mutex_unlock(RT_DEV_LOCK_FLASH);
+	offset += ptr->len;
+	
+	return ret;
+}
 
 int set_signature(uart_ymodem_t *ptr)
 {
@@ -459,6 +615,36 @@ int set_signature(uart_ymodem_t *ptr)
 	return ret;
 }
 
+#endif
+
+#if AUTO_REBOOT
+void auto_reboot(void)
+{
+#if defined(CONFIG_PLATFORM_8711B)
+	//wifi_off();
+
+	/*  Set processor clock to default before system reset */
+	//HAL_WRITE32(SYSTEM_CTRL_BASE, REG_SYS_CLK_CTRL1, 0x00000021);
+	CPU_ClkSet(CLK_31_25M);
+	osDelay(100);
+
+	/* CPU reset: Cortex-M3 SCB->AIRCR*/
+	NVIC_SystemReset();
+#else
+	// Set processor clock to default before system reset
+	HAL_WRITE32(SYSTEM_CTRL_BASE, 0x14, 0x00000021);
+	osDelay(100);
+
+	// Cortex-M3 SCB->AIRCR
+	HAL_WRITE32(0xE000ED00, 0x0C, (0x5FA << 16) |                             // VECTKEY
+	                              (HAL_READ32(0xE000ED00, 0x0C) & (7 << 8)) | // PRIGROUP
+	                              (1 << 2));                                  // SYSRESETREQ
+	while(1) osDelay(1000);
+
+#endif
+}
+#endif
+
 static void uart_ymodem_thread(void* param)
 {
 	u8 ch;
@@ -486,7 +672,8 @@ static void uart_ymodem_thread(void* param)
 			send_count++; 
 		}
 		if(xSemaphoreTake(ymodem_ptr->uart_rx_sema, 0) == pdTRUE){
-			RtlUpSema(&ymodem_ptr->uart_rx_sema);
+			//RtlUpSema(&ymodem_ptr->uart_rx_sema);			
+			rtw_up_sema(&ymodem_ptr->uart_rx_sema);
 			break;
 		}
 		else
@@ -614,12 +801,15 @@ exit:
 			printf("error!!! error bit = %d\r\n",error_bit);
 		else{
 			printf(" [%s, %d Bytes] transfer_over!\r\n",ymodem_ptr->filename,ymodem_ptr->filelen);	
-			set_signature(ymodem_ptr);
+			ret = set_signature(ymodem_ptr);
 #if DUMP_DATA
 			flash_dump_data(ymodem_ptr);
 #endif
 #if AUTO_REBOOT
-			auto_reboot();
+			if(!ret){
+				printf("\n\r[%s] Ready to reboot\r\n", __FUNCTION__);
+				auto_reboot();
+			}
 #endif
 		}
 	}
@@ -634,7 +824,8 @@ int uart_ymodem(void)
 	uart_ymodem_t *uart_ymodem_ptr;
 	
 	printf("uart ymodem update start\r\n");
-	uart_ymodem_ptr = (uart_ymodem_t *)RtlMalloc(sizeof(uart_ymodem_t));
+	//uart_ymodem_ptr = (uart_ymodem_t *)RtlMalloc(sizeof(uart_ymodem_t));
+	uart_ymodem_ptr = (uart_ymodem_t *)rtw_malloc(sizeof(uart_ymodem_t));
 	if(!uart_ymodem_ptr){
 		printf("uart ymodem malloc fail!\r\n");
 		ret = -1;

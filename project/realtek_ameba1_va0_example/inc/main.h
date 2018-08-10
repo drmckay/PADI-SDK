@@ -27,14 +27,16 @@ void wlan_network();
 
 #if CONFIG_EXAMPLE_UART_ATCMD
 #define ATCMD_VER ATVER_2
+#elif CONFIG_EXAMPLE_SPI_ATCMD
+#define ATCMD_VER ATVER_2
 #else
 #define ATCMD_VER ATVER_1
 #endif
 
-#if ATCMD_VER == ATVER_2
+
+#if ATCMD_VER == ATVER_2 || WIFI_LOGO_CERTIFICATION_CONFIG
 
 extern unsigned char sta_ip[4], sta_netmask[4], sta_gw[4];
-extern unsigned char ap_ip[4], ap_netmask[4], ap_gw[4];
 
 /*Static IP ADDRESS*/
 #define IP_ADDR0   sta_ip[0]
@@ -53,26 +55,6 @@ extern unsigned char ap_ip[4], ap_netmask[4], ap_gw[4];
 #define GW_ADDR1   sta_gw[1]
 #define GW_ADDR2   sta_gw[2]
 #define GW_ADDR3   sta_gw[3]
-
-/*******************************************/
-
-/*Static IP ADDRESS*/
-#define AP_IP_ADDR0   ap_ip[0]
-#define AP_IP_ADDR1   ap_ip[1]
-#define AP_IP_ADDR2   ap_ip[2]
-#define AP_IP_ADDR3   ap_ip[3]
-
-/*NETMASK*/
-#define AP_NETMASK_ADDR0   ap_netmask[0]
-#define AP_NETMASK_ADDR1   ap_netmask[1]
-#define AP_NETMASK_ADDR2   ap_netmask[2]
-#define AP_NETMASK_ADDR3   ap_netmask[3]
-
-/*Gateway Address*/
-#define AP_GW_ADDR0   ap_gw[0]
-#define AP_GW_ADDR1   ap_gw[1]
-#define AP_GW_ADDR2   ap_gw[2]
-#define AP_GW_ADDR3   ap_gw[3]
 
 #else
 
@@ -94,7 +76,33 @@ extern unsigned char ap_ip[4], ap_netmask[4], ap_gw[4];
 #define GW_ADDR2   1
 #define GW_ADDR3   1
 
-/*******************************************/
+#endif //#if ATCMD_VER == ATVER_2 || WIFI_LOGO_CERTIFICATION_CONFIG
+
+#if ATCMD_VER == ATVER_2
+#undef CONFIG_EXAMPLE_WLAN_FAST_CONNECT
+#define CONFIG_EXAMPLE_WLAN_FAST_CONNECT	1
+
+extern unsigned char ap_ip[4], ap_netmask[4], ap_gw[4];
+
+/*Static IP ADDRESS*/
+#define AP_IP_ADDR0   ap_ip[0]
+#define AP_IP_ADDR1   ap_ip[1]
+#define AP_IP_ADDR2   ap_ip[2]
+#define AP_IP_ADDR3   ap_ip[3]
+
+/*NETMASK*/
+#define AP_NETMASK_ADDR0   ap_netmask[0]
+#define AP_NETMASK_ADDR1   ap_netmask[1]
+#define AP_NETMASK_ADDR2   ap_netmask[2]
+#define AP_NETMASK_ADDR3   ap_netmask[3]
+
+/*Gateway Address*/
+#define AP_GW_ADDR0   ap_gw[0]
+#define AP_GW_ADDR1   ap_gw[1]
+#define AP_GW_ADDR2   ap_gw[2]
+#define AP_GW_ADDR3   ap_gw[3]
+
+#else
 
 /*Static IP ADDRESS*/
 #define AP_IP_ADDR0   192

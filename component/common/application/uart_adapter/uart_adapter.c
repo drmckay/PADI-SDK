@@ -16,7 +16,7 @@
 #include <mDNS/mDNS.h>
 #include <example_wlan_fast_connect.h>
 #include <timer_api.h>
-
+#include "wifi_simple_config.h"
 
 /***********************************************************************
  *                                                            Macros                                                                    *
@@ -27,9 +27,10 @@
  ***********************************************************************/
 char ua_tcp_server_ip[16];
 
-_Sema ua_exception_sema;
-_Sema ua_print_sema;
+_sema ua_exception_sema;
+_sema ua_print_sema;
 
+int ua_started = 0;
 int ua_gpio_irq_happen = 0;
 int ua_debug_print_en = 0;
 int ua_wifi_connected = 0;
@@ -49,6 +50,8 @@ extern unsigned char psk_passphrase[NET_IF_NUM][IW_PASSPHRASE_MAX_SIZE + 1];
 extern unsigned char wpa_global_PSK[NET_IF_NUM][A_SHA_DIGEST_LEN * 2];
 
 extern wlan_init_done_ptr p_wlan_uart_adapter_callback;
+
+extern char simple_config_terminate;
 /************************************************************************
  *                                                  extern funtions                                                                       *
  ************************************************************************/
@@ -71,7 +74,7 @@ static void uartadapter_uart_irq(uint32_t id, SerialIrq event)
 
 	if(event == RxIrq) {
 		ua_socket->uart.recv_buf[ua_socket->uart.pwrite++] = serial_getc(&ua_socket->uart.uart_sobj);
-		RtlUpSemaFromISR(&ua_socket->uart.action_sema);	//up action semaphore 
+		rtw_up_sema_from_isr(&ua_socket->uart.action_sema);	//up action semaphore 
 		
 		if(ua_socket->uart.pwrite > (UA_UART_RECV_BUFFER_LEN -1)){	//restart from  head if  reach tail
 			ua_socket->uart.pwrite = 0;
@@ -183,11 +186,11 @@ int uartadapter_uart_write(ua_socket_t *ua_socket, char *pbuf, size_t size)
 		return ret;
 	}	
 
-	while(RtlDownSema(&ua_socket->uart.dma_tx) == pdTRUE){			
+	while(rtw_down_sema(&ua_socket->uart.dma_tx) == pdTRUE){			
 	    	ret = serial_send_stream_dma(&ua_socket->uart.uart_sobj, pbuf, size);
 	    	if(ret != HAL_OK){
 			ua_printf(UA_ERROR, "uart dma tx error %d!!", ret);
-			RtlUpSema(&ua_socket->uart.dma_tx);
+			rtw_up_sema(&ua_socket->uart.dma_tx);
 			return -1;
 		}else{
 			return 0;
@@ -201,7 +204,7 @@ void uartadapter_uart_send_stream_done(uint32_t id)
 {
 	ua_socket_t *ua_socket = (ua_socket_t *)id;
 	
-	RtlUpSemaFromISR(&ua_socket->uart.dma_tx);
+	rtw_up_sema_from_isr(&ua_socket->uart.dma_tx);
 }
 
 static void uartadapter_uart_rx_thread(void* param)
@@ -221,7 +224,7 @@ static void uartadapter_uart_rx_thread(void* param)
 
 
 	while(1){
-		if(RtlDownSemaWithTimeout(&ua_socket->uart.action_sema, 1000) == pdTRUE){
+		if(rtw_down_timeout_sema(&ua_socket->uart.action_sema, 1000) == pdTRUE){
 			ret = uartadapter_uart_recv_data(ua_socket);		
 			if(ret == -1){
 				ua_printf(UA_ERROR, "uart recv data error!");
@@ -241,7 +244,7 @@ static void uartadapter_uart_rx_thread(void* param)
 				ua_socket->uart.uart_ps_cnt = 5;
 				ua_socket->uart.uart_ps = 1;
 				if(ua_socket->uart.uart_ps && ua_socket->tcp.tcp_ps){
-					release_wakelock(UA_WAKELOCK);		
+					pmu_release_wakelock(UA_WAKELOCK);		
 				}
 			}
 		}
@@ -251,7 +254,7 @@ static void uartadapter_uart_rx_thread(void* param)
 }
 
 void uartadapter_uart_gpio_wakeup_callback (uint32_t id, gpio_irq_event event) {
-	acquire_wakelock(UA_WAKELOCK);
+	pmu_acquire_wakelock(UA_WAKELOCK);
 	ua_socket_t *ua_socket = (ua_socket_t *)id;
 	ua_socket->uart.uart_ps = 0;
 	ua_socket->uart.uart_ps_cnt = 0;	
@@ -448,7 +451,7 @@ void uartadapter_gpio_irq (uint32_t id, gpio_irq_event event)
        ua_printf(UA_DEBUG, "GPIO push button!!");
 	
        ua_gpio_irq_happen = 1;
-	RtlUpSemaFromISR(&ua_exception_sema);
+	rtw_up_sema_from_isr(&ua_exception_sema);
 }
 
 void uartadapter_gtimer_timeout_handler(uint32_t id)
@@ -473,7 +476,7 @@ void uartadapter_gpio_init(ua_socket_t *ua_socket)
     	gpio_irq_enable(&ua_socket->gpio.gpio_btn_irq);
 
     	// Initial a periodical timer
-    	gtimer_init(&ua_socket->gpio.gpio_timer, TIMER0);
+    	gtimer_init(&ua_socket->gpio.gpio_timer, UA_GPIO_TIMER);
     	//gtimer_start_periodical(&ua_socket->gpio.gpio_timer, 100000, (void*)timer_timeout_handler, (uint32_t)&ua_socket->gpio.gpio_led);
 }
 
@@ -556,6 +559,8 @@ int uartadapter_control_read_tcp_info_and_connect(ua_socket_t *ua_socket)
 				ua_printf(UA_ERROR, "%s xTaskCreate(tcp client) failed", __FUNCTION__);				
 			}
 	}
+	else
+		ua_printf(UA_INFO, "%s : read tcp info nothing", __FUNCTION__);
 	return 0;
 }
 
@@ -1095,9 +1100,9 @@ void uartadapter_tcp_send_data(ua_socket_t *ua_socket, char *buffer, int size)
 	
 	if(ua_socket->tcp.chat_socket != -1){	
 		ua_socket->tcp.send_flag = 1;
-		RtlDownSema(&ua_socket->uart.tcp_tx_rx_sema);			
+		rtw_down_sema(&ua_socket->uart.tcp_tx_rx_sema);			
 		iStatus = send(ua_socket->tcp.chat_socket, buffer, size, 0 );
-		RtlUpSema(&ua_socket->uart.tcp_tx_rx_sema);	
+		rtw_up_sema(&ua_socket->uart.tcp_tx_rx_sema);	
 		ua_socket->tcp.send_flag = 0;				
 		if( iStatus <= 0 ){
 			ua_printf(UA_ERROR, "tcp chat socket send data error!  iStatus:%d!", iStatus);
@@ -1212,9 +1217,9 @@ void uartadapter_tcp_chat_socket_handler(ua_socket_t *ua_socket, char *tcp_rxbuf
 	UA_SOCKET_CHECK(ua_socket);	
 
 	ua_socket->tcp.recv_flag = 1; 
-	RtlDownSema(&ua_socket->uart.tcp_tx_rx_sema);
+	rtw_down_sema(&ua_socket->uart.tcp_tx_rx_sema);
 	recv_len = recv(ua_socket->tcp.chat_socket, tcp_rxbuf, UA_UART_FRAME_LEN, MSG_DONTWAIT);
-	RtlUpSema(&ua_socket->uart.tcp_tx_rx_sema);
+	rtw_up_sema(&ua_socket->uart.tcp_tx_rx_sema);
        ua_socket->tcp.recv_flag = 0;	
 	if(recv_len < 0){
 		ua_printf(UA_ERROR, "Tcp Chat Socket %d Recv Error, ret = %d", ua_socket->tcp.chat_socket, recv_len);
@@ -1610,7 +1615,7 @@ void uartadapter_tcp_select_thread(void *param)
         	if(ret > 0){
 #if UA_PS_ENABLE	
 			//printf("select get lock \r\n");
-			acquire_wakelock(UA_WAKELOCK);	
+			pmu_acquire_wakelock(UA_WAKELOCK);	
 			ua_socket->tcp.tcp_ps = 0;
 			ua_socket->tcp.tcp_ps_cnt = 0;
 #endif
@@ -1650,7 +1655,7 @@ void uartadapter_tcp_select_thread(void *param)
 				ua_socket->tcp.tcp_ps_cnt = 5;				
 				ua_socket->tcp.tcp_ps = 1;		
 				if(ua_socket->uart.uart_ps && ua_socket->tcp.tcp_ps){
-					release_wakelock(UA_WAKELOCK);	
+					pmu_release_wakelock(UA_WAKELOCK);	
 				}
 			}
 		}
@@ -1774,19 +1779,32 @@ static int uartadapter_load_wifi_config()
 
 #if CONFIG_INCLUDE_SIMPLE_CONFIG
 int uartadapter_simple_config(char *pin_code){
-
+	char *custom_pin_code = NULL;
 	enum sc_result ret = SC_ERROR;
-	wifi_enter_promisc_mode();
-	if(init_test_data(pin_code) == 0){
-		filter_add_enable();
+
+	simple_config_terminate = 0;
+	
+#if !UA_SC_SOFTAP_EN
+    wifi_enter_promisc_mode();
+#endif
+
+	if(init_test_data(custom_pin_code) == 0){
+	
+#if !UA_SC_SOFTAP_EN	
+	    filter_add_enable(); 
+#endif	    
 		ret = simple_config_test(NULL);
-		//print_simple_config_result(ret);
+		deinit_test_data();
+		
+#if !UA_SC_SOFTAP_EN		
 		remove_filter();
-		if(ret == SC_SUCCESS)
-			return RTW_SUCCESS;
-		else
-			return RTW_ERROR;
-	}else{
+#endif		
+		print_simple_config_result(ret);
+	}
+	if(ret == SC_SUCCESS){
+		return RTW_SUCCESS;
+	}
+	else{
 		return RTW_ERROR;
 	}
 }
@@ -1975,7 +1993,7 @@ void uartadapter_exception_thread(void *param)
 
 	ua_socket_t *ua_socket = (ua_socket_t *)param;
 	
-	while(RtlDownSema(&ua_exception_sema) == pdTRUE){	
+	while(rtw_down_sema(&ua_exception_sema) == pdTRUE){	
 		if(ua_gpio_irq_happen){
 			pin_high = 0;
 			tick_start = xTaskGetTickCount();
@@ -2032,9 +2050,9 @@ ua_socket_t* uartadapter_socket_init()
 	ua_socket->uart.rx_cnt = 0;
 	ua_socket->uart.miss_cnt = 0;
 	ua_socket->uart.tx_busy = 0;	
-	RtlInitSema(&ua_socket->uart.action_sema, 0);
-	RtlInitSema(&ua_socket->uart.tcp_tx_rx_sema, 1);
-	RtlInitSema(&ua_socket->uart.dma_tx, 1);		
+	rtw_init_sema(&ua_socket->uart.action_sema, 0);
+	rtw_init_sema(&ua_socket->uart.tcp_tx_rx_sema, 1);
+	rtw_init_sema(&ua_socket->uart.dma_tx, 1);		
 
 	ua_socket->tcp.chat_socket= -1;
 	ua_socket->tcp.control_socket= -1;
@@ -2078,7 +2096,7 @@ void uartadapter_disconnect_handler(char *buf, int buf_len, int flags, void *use
 	ua_printf(UA_DEBUG, "start uart adapter reconnect thread\r\n");
 	//uartadapter_gpio_led_mode(ua_global_socket, UART_ADAPTER_LED_FAST_TWINKLE);			
 	
-	if(xTaskCreate(uartadapter_auto_reconnect, ((const char*)"reconnect"), 512, (void *)ua_global_socket, UA_UART_THREAD_PRIORITY, NULL) != pdPASS)
+	if(xTaskCreate(uartadapter_auto_reconnect, ((const char*)"reconnect"), 1024, (void *)ua_global_socket, UA_UART_THREAD_PRIORITY, NULL) != pdPASS)
 		ua_printf(UA_ERROR, "%s xTaskCreate(uart_rx) failed", __FUNCTION__);
 
 }
@@ -2086,8 +2104,12 @@ void uartadapter_disconnect_handler(char *buf, int buf_len, int flags, void *use
 int uartadapter_init()
 {
 	int ret = 0;
-
-	RtlInitSema(&ua_print_sema, 1);
+	if(ua_started)
+		return 0;
+	
+	ua_started = 1;
+	
+	rtw_init_sema(&ua_print_sema, 1);
 
 	ua_printf(UA_INFO, "==============>%s()\n", __func__);
 
@@ -2099,10 +2121,10 @@ int uartadapter_init()
 	}
 
 #if !UA_PS_ENABLE
-      acquire_wakelock(UA_WAKELOCK);
+      pmu_acquire_wakelock(UA_WAKELOCK);
 #endif
 
-	RtlInitSema(&ua_exception_sema, 0);	
+	rtw_init_sema(&ua_exception_sema, 0);	
 	
 	uartadapter_uart_init(ua_global_socket);
 

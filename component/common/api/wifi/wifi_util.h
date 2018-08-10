@@ -12,6 +12,8 @@ extern "C" {
 
 int wext_get_ssid(const char *ifname, __u8 *ssid);
 int wext_set_ssid(const char *ifname, const __u8 *ssid, __u16 ssid_len);
+int wext_set_bssid(const char *ifname, const __u8 *bssid);
+int wext_get_bssid(const char *ifname, __u8 *bssid);
 int wext_set_auth_param(const char *ifname, __u16 idx, __u32 value);
 int wext_set_key_ext(const char *ifname, __u16 alg, const __u8 *addr, int key_idx, int set_tx, const __u8 *seq, __u16 seq_len, __u8 *key, __u16 key_len);
 int wext_get_enc_ext(const char *ifname, __u16 *alg, __u8 *key_idx, __u8 *passphrase);
@@ -44,7 +46,7 @@ int wext_private_command(const char *ifname, char *cmd, int show_msg);
 int wext_private_command_with_retval(const char *ifname, char *cmd, char *ret_buf, int ret_len);
 void wext_wlan_indicate(unsigned int cmd, union iwreq_data *wrqu, char *extra);
 int wext_set_pscan_channel(const char *ifname, __u8 *ch, __u8 *pscan_config, __u8 length);
-int wext_set_autoreconnect(const char *ifname, __u8 mode, __u8 retyr_times, __u16 timeout);
+int wext_set_autoreconnect(const char *ifname, __u8 mode, __u8 retry_times, __u16 timeout);
 int wext_get_autoreconnect(const char *ifname, __u8 *mode);
 int wext_set_adaptivity(rtw_adaptivity_mode_t adaptivity_mode);
 int wext_set_adaptivity_th_l2h_ini(__u8 l2h_threshold);
@@ -55,6 +57,7 @@ int wext_init_mac_filter(void);
 int wext_deinit_mac_filter(void);
 int wext_add_mac_filter(unsigned char* hwaddr);
 int wext_del_mac_filter(unsigned char* hwaddr);
+void wext_set_indicate_mgnt(int enable);
 #ifdef CONFIG_CUSTOM_IE
 int wext_add_custom_ie(const char *ifname, void * cus_ie, int ie_num);
 int wext_update_custom_ie(const char *ifname, void * cus_ie, int ie_index);

@@ -117,7 +117,7 @@ void us_ticker_set_interrupt(timestamp_t timestamp)
     if (time_def < TIMER_TICK_US) {
         time_def = TIMER_TICK_US;       // at least 1 tick
     }
-    
+    HalTimerDeInit (&TimerAdapter);
     TimerAdapter.IrqDis = 0;    // Enable Irq
     TimerAdapter.TimerLoadValueUs = time_def;
     TimerAdapter.TimerMode = USER_DEFINED; // Countdown Free Run

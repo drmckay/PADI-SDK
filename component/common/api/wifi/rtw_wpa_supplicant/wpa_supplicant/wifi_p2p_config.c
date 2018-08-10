@@ -202,7 +202,7 @@ void cmd_p2p_connect(int argc, char **argv)
 	char *pin = NULL;
 	u8 dest[ETH_ALEN] = {0x44, 0x6d, 0x57, 0xd7, 0xce, 0x41};
 	u8 res[P2P_GO_NEGO_RESULT_SIZE];
-	int ret = 0;
+	int ret = 0, result = 0;
 
 #if 1
 	if((argc != 2) && (argc != 3) && (argc != 4)) {
@@ -256,12 +256,12 @@ void cmd_p2p_connect(int argc, char **argv)
 	if(queue_for_p2p_nego != NULL) {
 		ret = wifi_cmd_p2p_connect(dest, config_method, pin);
 		if(ret == 0)
-			os_xqueue_receive(queue_for_p2p_nego, res, 15);
+			result = os_xqueue_receive(queue_for_p2p_nego, res, 15);
 
 		os_xqueue_delete(queue_for_p2p_nego);
 		queue_for_p2p_nego = NULL;
 
-		if(ret == 0)
+		if((ret == 0) || (result == 0))
 			wifi_p2p_start_wps(res);
 	}
 }

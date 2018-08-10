@@ -31,7 +31,7 @@
 #define __DWC_OTG_DBG_H__
 #include "section_config.h"
 
-//#define OTGDEBUG    1
+#define OTGDEBUG    1
 #define VERBOSE     1
 
 /** @file

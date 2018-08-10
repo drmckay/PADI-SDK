@@ -1158,7 +1158,7 @@ SEND_I2C_WR_CMD_INTR:
 
                 /* I2C Device Status Update */
                 pSalI2CHND->DevSts  = I2C_STS_TX_ING;
-                
+
                 /* Check I2C TX FIFO status */
                 /* Fill TX FIFO only when it's completely empty */
                 I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_STATUS);
@@ -1262,13 +1262,22 @@ SEND_I2C_WR_CMD_INTR:
                             return HAL_ERR_HW;
 	                    }
 	                    
+						/* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+						
 	                    RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
 
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
+                        
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
@@ -1311,13 +1320,22 @@ SEND_I2C_WR_CMD_INTR:
                                 pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
                             return HAL_ERR_HW;
 	                    }
-	                    
+	                    /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
 
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -1374,6 +1392,9 @@ SEND_I2C_WR_CMD_INTR:
                             /* Invoke I2C TX complete callback if available */
                             if (pSalI2CUserCB->pTXCCB->USERCB != NULL)
                                 pSalI2CUserCB->pTXCCB->USERCB((void *)pSalI2CUserCB->pTXCCB->USERData);
+							
+							/* I2C Device Status Update */
+							pSalI2CHND->DevSts  = I2C_STS_IDLE;
                         }
                         
                         break;  //end of send process in INTR mode
@@ -1389,12 +1410,23 @@ SEND_I2C_WR_CMD_INTR:
                         //DBG_I2C_ERR("DevSts:%x, ErrType:%x\n", pSalI2CHND->DevSts, pSalI2CHND->ErrType);
                         if (pSalI2CUserCB->pERRCB->USERCB != NULL)
                                     pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
+
+                        /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
 
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -1409,12 +1441,23 @@ SEND_I2C_WR_CMD_INTR:
                         pSalI2CHND->ErrType = I2C_ERR_TX_FF_TO;
                         if (pSalI2CUserCB->pERRCB->USERCB != NULL)
                                     pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
+
+                        /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
 
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -2005,13 +2048,23 @@ SEND_I2C_RD_CMD_INTR:
                                 pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
                             return HAL_ERR_HW;
 	                    }
-	                    
+                        
+	                    /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
 
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -2052,13 +2105,23 @@ SEND_I2C_RD_CMD_INTR:
                                 pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
                             return HAL_ERR_HW;
 	                    }
-	                    
+
+                        /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
 
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -2116,12 +2179,23 @@ SEND_I2C_RD_CMD_INTR:
                         pSalI2CHND->ErrType = I2C_ERR_TX_FF_TO;
                         if (pSalI2CUserCB->pERRCB->USERCB != NULL)
                                     pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
+
+                        /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
                         
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -2136,12 +2210,23 @@ SEND_I2C_RD_CMD_INTR:
                         pSalI2CHND->ErrType = I2C_ERR_TX_FF_TO;
                         if (pSalI2CUserCB->pERRCB->USERCB != NULL)
                                     pSalI2CUserCB->pERRCB->USERCB((void *)pSalI2CUserCB->pERRCB->USERData);
+
+                        /* use InTimeoutCount to backup tar here */
+                        InTimeoutCount = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat, REG_DW_I2C_IC_TAR);
+                        InTimeoutCount = BIT_GET_IC_TAR(InTimeoutCount);
+                        
                         RtkI2CDeInitForPS(pSalI2CHND);
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) == BIT_IC_ENABLE_STATUS_IC_EN){
                             I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         }
+
+                        
+                        
                         RtkI2CInitForPS(pSalI2CHND);
+
+                        pSalI2CHND->pInitDat->I2CAckAddr = InTimeoutCount;
+                        HalI2CSetTarRtl8195a(pSalI2CHND->pInitDat);
 
                         I2CChkRawSts = (u32)pHalI2COP->HalI2CReadReg(pHalI2CInitDat,REG_DW_I2C_IC_ENABLE_STATUS);
                         while((I2CChkRawSts & BIT_IC_ENABLE_STATUS_IC_EN) != BIT_IC_ENABLE_STATUS_IC_EN){
@@ -2582,7 +2667,7 @@ RtkI2CGetMngtAdpt(
     PSAL_I2C_USERCB_ADPT    pSalI2CUserCBAdpt   = NULL;
 
     /* If the kernel is available, Memory-allocation is used. */
-#ifdef I2C_STATIC_ALLOC
+#ifndef I2C_STATIC_ALLOC
 
     pSalI2CMngtAdpt = (PSAL_I2C_MNGT_ADPT)RtlZmalloc(sizeof(SAL_I2C_MNGT_ADPT));
     pSalI2CMngtAdpt->pSalHndPriv    = (PSAL_I2C_HND_PRIV)RtlZmalloc(sizeof(SAL_I2C_HND_PRIV));
@@ -2671,7 +2756,7 @@ RtkI2CGetMngtAdpt(
             break;
         }
         
-        default
+        default:
             break;
     }
 #endif
@@ -2752,7 +2837,7 @@ HAL_Status
 RtkI2CFreeMngtAdpt(
     IN  PSAL_I2C_MNGT_ADPT  pSalI2CMngtAdpt
 ){
-#ifdef I2C_STATIC_ALLOC
+#ifndef I2C_STATIC_ALLOC
     RtlMfree((u8 *)pSalI2CMngtAdpt->pUserCB->pTXCB, (sizeof(SAL_I2C_USERCB_ADPT)*SAL_USER_CB_NUM));
     RtlMfree((u8 *)pSalI2CMngtAdpt->pDMAConf, (sizeof(SAL_I2C_DMA_USER_DEF)));
     RtlMfree((u8 *)pSalI2CMngtAdpt->pIrqRxGdmaHnd, (sizeof(IRQ_HANDLE)));

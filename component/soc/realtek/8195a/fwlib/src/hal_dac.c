@@ -169,7 +169,7 @@ RtkDACGetMngtAdpt(
 ){
     PSAL_DAC_MNGT_ADPT      pSalDACMngtAdpt     = NULL;
     PSAL_DAC_USERCB_ADPT    pSalDACUserCBAdpt   = NULL;
-
+	DACIdx = DACIdx;
     /* If the kernel is available, Memory-allocation is used. */
 #if !DAC_STATIC_ALLOC
 

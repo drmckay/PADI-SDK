@@ -111,11 +111,10 @@ uint16_t read_hrm(void) {
 void main(void) {
 	int i, length;
 	int *data;
-	int should_stop = 0;
-	uint16_t result;
+        uint16_t result;
 	data = (int*) calloc(3000, sizeof(int));
 	//load_ppg_signal(data, &length); //Load Test Data From File
-	i2c_init(&i2cmaster, MBED_I2C_MTR_SDA ,MBED_I2C_MTR_SCL);
+        i2c_init(&i2cmaster, MBED_I2C_MTR_SDA ,MBED_I2C_MTR_SCL);
 	i2c_frequency(&i2cmaster,MBED_I2C_BUS_CLK);
 //Step2. delegate the event of heart rate update
 	register_callback(on_heartrate_update);
@@ -131,15 +130,13 @@ void main(void) {
 	ePL_WriteCommand(((0x06<<3)<<8) | ( HR_IR_ENABLE | HR_INT_FRAME));
 	ePL_WriteCommand(((0x08<<3)<<8) | ( HR_RESETN_RESET));
 	while(1) {
-		//Step4. Add ppg data continuously, and the Lib will return the Heart Rate 1 time/sec
+//Step4. Add ppg data continuously, and the Lib will return the Heart Rate 1 time/sec
 		result = read_hrm();
-
-		if(result>100)
-			add_PPG_XYZ(result, 0, 0, 0);
+                
+                if(result>100)
+                  add_PPG_XYZ(result, 0, 0, 0);
 
 		Mdelay(40);	//Simulate the ppg input time interval = 40ms
-		if(should_stop)
-			break;
 	}
 
 //Step5. Stop

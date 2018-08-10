@@ -78,6 +78,7 @@ enum _SPIC_BIT_MODE_ {
 #define FLASH_CMD_WRDI      0x04            //write disable
 #define FLASH_CMD_WRSR      0x01            //write status register
 #define FLASH_CMD_RDID      0x9F            //read idenfication
+#define FLASH_CMD_RDUID     0x4B          //Read Unique ID
 #define FLASH_CMD_RDSR      0x05            //read status register
 #define FLASH_CMD_RDSFDP    0x5A            //Read SFDP
 #define FLASH_CMD_READ      0x03            //read data
@@ -339,6 +340,7 @@ VOID SpicDeepPowerDownFlashRtl8195A(VOID);
 VOID SpicUserProgramRtl8195A(IN u8 * data, IN SPIC_INIT_PARA SpicInitPara, IN u32 addr, IN u32 * LengthInfo);
 VOID SpicUserReadRtl8195A(IN u32 Length, IN u32 addr, IN u8 * data, IN u8 BitMode);
 VOID SpicUserReadFourByteRtl8195A(IN u32 Length, IN u32 addr, IN u32 * data, IN u8 BitMode);
+VOID SpicReadUniqueIDRtl8195A(IN  u8 *buff,IN  u8  len);
 VOID SpicReadIDRtl8195A(VOID);
 VOID SpicSetFlashStatusRefinedRtl8195A(IN u32 data, IN SPIC_INIT_PARA SpicInitPara);
 VOID SpicSetExtendAddrRtl8195A(IN u32 data, IN SPIC_INIT_PARA SpicInitPara);

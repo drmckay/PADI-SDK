@@ -1,7 +1,40 @@
+/** mbed Microcontroller Library
+  ******************************************************************************
+  * @file    spdio_api.h
+  * @author 
+  * @version V1.0.0
+  * @brief   This file provides following mbed SPDIO API
+  ******************************************************************************
+  * @attention
+  *
+  * Copyright (c) 2006-2013 ARM Limited
+  *
+  * Licensed under the Apache License, Version 2.0 (the "License");
+  * you may not use this file except in compliance with the License.
+  * You may obtain a copy of the License at
+  *
+  *     http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  ****************************************************************************** 
+  */
 #ifndef __SPDIO_API_H__
 #define __SPDIO_API_H__
 
 #include <osdep_service.h>
+
+/** @addtogroup spdio_api SPDIO
+ *  @ingroup    hal
+ *  @brief      spdio functions
+ *  @{
+ */
+
+///@name Ameba Common
+///@{
 
 #define SPDIO_API_DBG
 
@@ -51,23 +84,23 @@ struct spdio_t {
 	struct spdio_buf_t *rx_buf; //buffer array for spdio receive assigned by user, rx_bd_bufsz * rx_bd_num
 
 	/**
-	 *@brief: rx_done_cb: pointer to callback function defined by user, 
+	 *@brief pointer to callback function defined by user, 
 	 		called by spdio when one packet receive done
 	 *@param priv: a pointer to spdio_t structure which is used to initilize spdio interface
 	 *@param pbuf: a pointer to spdio_buf_t structure which is spdio receive buffer
 	 *@param pdata: the actual received packet payload
 	 *@param size: the actual payload length
 	 *@param type: the received packet type, spdio_rx_data_t
-	 *@retval: SUCCESS or FAIL
+	 *@retval SUCCESS or FAIL
 	 */
 	char (*rx_done_cb)(void *priv, void* pbuf, u8 *pdata, u16 size, u8 type); 
 	
 	/**
-	 *@brief: tx_done_cb: pointer to callback function defined by user, 
+	 *@brief pointer to callback function defined by user, 
 	 		called by spdio when one packet sent done
 	 *@param priv: a pointer to spdio_t structure which is used to initilize spdio interface
 	 *@param pbuf: a pointer to spdio_buf_t structure which carries the transmit packet
-	 *@retval: SUCCESS or FAIL
+	 *@retval SUCCESS or FAIL
 	 */
 	char (*tx_done_cb)(void *priv, void* pbuf); 
 };
@@ -111,5 +144,9 @@ s8 spdio_tx(struct spdio_t *obj, struct spdio_buf_t *pbuf);
   *		so it must be initialized before calling HalSdioInit();
   */
 extern struct spdio_t *g_spdio_priv;
+
+///@}
+
+/*\@}*/
 
 #endif //#ifndef __SPDIO_API_H__

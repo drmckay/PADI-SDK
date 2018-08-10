@@ -217,7 +217,7 @@ HalADCDeInit8195a(
 )
 {
     u32 AdcTempDat;
-
+    Data = Data;
     AdcTempDat      =   HAL_ADC_READ32(REG_ADC_POWER);
     AdcTempDat      &=  ~(BIT_ADC_PWR_AUTO);
     HAL_ADC_WRITE32(REG_ADC_POWER, AdcTempDat);
@@ -258,7 +258,7 @@ HalADCEnableRtl8195a(
     //PHAL_ADC_INIT_DAT   pHalAdcInitData     =   (PHAL_ADC_INIT_DAT)Data;
     u32 AdcTempDat;
 	DBG_ADC_INFO("HalADCEnableRtl8195a\n");
-    
+    Data = Data;
     AdcTempDat      =   HAL_ADC_READ32(REG_ADC_POWER);
 	
     AdcTempDat      &=  (~BIT_ADC_PWR_AUTO);
@@ -341,7 +341,7 @@ HalADCReceiveRtl8195a(
     IN  VOID    *Data
 ){
     u32 AdcTempDat;
-
+    Data = Data;
     AdcTempDat = HAL_ADC_READ32(REG_ADC_FIFO_READ);
     
     return (AdcTempDat);
@@ -380,7 +380,7 @@ HalADCReadRegRtl8195a(
         IN  u8      I2CReg
 ){
     u32 AdcTempDat;
-
+    Data = Data;
     AdcTempDat  =   HAL_ADC_READ32(I2CReg);
     return (AdcTempDat);
 }

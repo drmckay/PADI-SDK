@@ -62,7 +62,7 @@
 
 static int wsa_init_done = 0;
 
-#elif defined(__ICCARM__) || defined(__CC_ARM) ||  defined(__GNUC__)
+#elif defined(__ICCARM__) || defined(__CC_ARM) || defined ( __GNUC__ )
 
 #include "lwip/sockets.h"
 #include "lwip/inet.h"
@@ -161,7 +161,7 @@ static int net_prepare( void )
         wsa_init_done = 1;
     }
 #else
-#if !defined(EFIX64) && !defined(EFI32) && !defined(__ICCARM__) && !defined(__CC_ARM) && !defined(__GNUC__)
+#if !defined(EFIX64) && !defined(EFI32) && !defined(__ICCARM__) && !defined(__CC_ARM) &&  !defined ( __GNUC__ )
     signal( SIGPIPE, SIG_IGN );
 #endif
 #endif
@@ -488,7 +488,7 @@ int net_accept( int bind_fd, int *client_fd, void *client_ip )
  */
 int net_set_block( int fd )
 {
-#if ( defined(_WIN32) || defined(_WIN32_WCE) || defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)) && !defined(EFIX64) && \
+#if ( defined(_WIN32) || defined(_WIN32_WCE) || defined(__ICCARM__) || defined(__CC_ARM) || defined ( __GNUC__ )) && !defined(EFIX64) && \
     !defined(EFI32)
     unsigned long n = 0;
     return( ioctlsocket( fd, FIONBIO, &n ) );
@@ -499,7 +499,7 @@ int net_set_block( int fd )
 
 int net_set_nonblock( int fd )
 {
-#if ( defined(_WIN32) || defined(_WIN32_WCE) || defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)) && !defined(EFIX64) && \
+#if ( defined(_WIN32) || defined(_WIN32_WCE) || defined(__ICCARM__) || defined(__CC_ARM)  || defined ( __GNUC__ )) && !defined(EFIX64) && \
     !defined(EFI32)
     unsigned long n = 1;
     return( ioctlsocket( fd, FIONBIO, &n ) );

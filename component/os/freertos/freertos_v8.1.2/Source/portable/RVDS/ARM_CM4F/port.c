@@ -791,6 +791,13 @@ __asm uint32_t vPortGetIPSR( void )
 
 #endif /* configASSERT_DEFINED */
 
+/*-----------------------------------------------------------*/
+void vApplicationIdleHook( void )
+{
+	/* Use the idle task to place the CPU into a low power mode.  Greater power
+	saving could be achieved by not including any demo tasks that never block. */
+}
+
 void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName )
 {
 	/* This function will be called if a task overflows its stack, if

@@ -8,6 +8,9 @@
 #define	_XMODE_H_
 
 #include <basic_types.h>
+#if defined(CONFIG_PLATFORM_8711B)
+#define  xModemRxBuffer         _xModemRxBuffer
+#endif
 
 /*****************
  * X-Modem status

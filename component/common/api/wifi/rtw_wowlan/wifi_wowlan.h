@@ -3,8 +3,6 @@
 
 #include <platform_stdlib.h>
 #include <osdep_service.h>
-#include <FreeRTOS.h>
-#include <timers.h>
 
 #define WOWLAN_DBG 1
 
@@ -131,8 +129,8 @@ __inline static void _exit_wowlock(_wowlock *plock)
 }
 
 /*Timer services*/
-typedef TimerHandle_t _wowTimer;
-#define TMR_AUTO_RELOAD_EN	_TRUE
+typedef _timerHandle _wowTimer;
+#define TMR_AUTO_RELOAD_EN		_TRUE
 #define TMR_AUTO_RELOAD_DIS	_FALSE
 
 __inline static void
@@ -169,7 +167,13 @@ _wowlan_del_timer(_wowTimer *ptimer)
 __inline static void *
 _wowlan_get_timer_cntx(_wowTimer timer)
 {
+#ifdef PLATFORM_FREERTOS
+#include <FreeRTOS.h>
+#include <timers.h>
 	return pvTimerGetTimerID(timer);
+#else
+	#error "_wowlan_get_timer_cntx is not defined"
+#endif
 }
 
 enum rtw_wowlan_wakeup_reason {
@@ -209,7 +213,7 @@ struct rtw_wowlan_rx_filter {
 	struct rtw_wowlan_rx_filter_field fields[RTW_WOWLAN_RX_FILTER_MAX_FIELDS];
 };
 
-#if defined(__IAR_SYSTEMS_ICC__)
+#if defined(__IAR_SYSTEMS_ICC__)|| defined (__GNUC__)
 #pragma pack(1)
 #else
 #error "this structure needs to be packed!"
@@ -218,7 +222,7 @@ struct rtw_wowlan_status {
 	u32 wakeup_reasons; //record wake up reason
 	u32 filter_id; //record which pattern is matched
 };
-#if defined(__IAR_SYSTEMS_ICC__)
+#if defined(__IAR_SYSTEMS_ICC__)|| defined (__GNUC__)
 #pragma pack()
 #else
 #error "this structure needs to be packed!"

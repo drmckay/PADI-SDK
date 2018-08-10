@@ -8,7 +8,6 @@ SECTIONS
     BusFault_Handler = 0x125;
     UsageFault_Handler = 0x129;
     HalLogUartInit = 0x201;
-    HalSerialPutcRtl8195a = 0x2d9;
     HalSerialGetcRtl8195a = 0x309;
     HalSerialGetIsrEnRegRtl8195a = 0x329;
     HalSerialSetIrqEnRegRtl8195a = 0x335;

@@ -15,7 +15,10 @@
 extern VOID  ReadEfuseContant1(OUT u8 *pContant);
 extern u8 WriteEfuseContant1(IN u8 CodeWordNum, IN u8 WordEnable, IN u8 *pContant);
 extern VOID ReadEOTPContant(OUT u8 *pContant);
-extern VOID  WriteEOTPContant(IN u8 *pContant);
+extern u32  WriteEOTPContant(IN u8 *pContant);
+extern u32 EOTPChkContant(IN u8 * pContant);
+extern u32  WriteKEY1(IN u8 *pContant);
+extern u32  WriteKEY2(IN u8 *pContant);
 extern u8 GetRemainingEfuseLength(void);
 extern VOID HALJtagOff(VOID);
 
@@ -127,19 +130,84 @@ int efuse_otp_read(u8 address, u8 len, u8 *buf)
   * @brief  Write user's contant to OTP efuse
   * @param  address: Specifies the offset of the programmed OTP.
   * @param len: Specifies the data length of programmed data.
-   * @param  *buf: Specified the data to be programmed.
+  * @param  *buf: Specified the data to be programmed.
   * @retval   status: Success:0 or Failure: -1.
   */
 int efuse_otp_write(u8 address, u8 len, u8 *buf)
 {
 	u8 content[32];	// the OTP max length is 32
-	
+	u32 result;
+
 	if((address+len) > 32)
 		return -1;
 	_memset(content, 0xFF, 32);
 	_memcpy(content+address, buf, len);
-	WriteEOTPContant(content);
-	return 0;
+	result = WriteEOTPContant(content);
+
+    return (result? 0 : -1);
+}
+
+
+/**
+  * @brief  ckeck user's contant to OTP efuse
+  * @param  *buf: Specified the data to be programmed.
+  * @param len: Specifies the data length of programmed data.
+  * @retval   status: Success:0 or Failure: -1.
+  */
+int efuse_otp_chk(u8 len, u8 *buf)
+{
+	u8 content[32];	// the OTP max length is 32
+	u32 result;
+
+	_memset(content, 0xFF, 32);
+	_memcpy(content, buf, len);
+	result = EOTPChkContant(content);
+
+    return (result? 0 : -1);
+}
+
+
+/**
+  * @brief  Write key1 to efuse
+  * @param  address: Specifies the offset of the programmed efuse.
+  * @param len: Specifies the data length of programmed data.
+   * @param  *buf: Specified the data to be programmed.
+  * @retval   status: Success:0 or Failure: -1.
+  */
+int efuse_key1_write(u8 address, u8 len, u8 *buf)
+{
+	u8 content[16];	// the key max length is 16
+	u32 result;
+
+	if((address+len) > 16)
+		return -1;
+	_memset(content, 0xFF, 16);
+	_memcpy(content+address, buf, len);
+	result = WriteKEY1(content);
+
+    return (result? 0 : -1);
+}
+
+
+/**
+  * @brief  Write key2 to efuse
+  * @param  address: Specifies the offset of the programmed efuse.
+  * @param len: Specifies the data length of programmed data.
+   * @param  *buf: Specified the data to be programmed.
+  * @retval   status: Success:0 or Failure: -1.
+  */
+int efuse_key2_write(u8 address, u8 len, u8 *buf)
+{
+	u8 content[16];	// the key max length is 16
+	u32 result;
+
+	if((address+len) > 16)
+		return -1;
+	_memset(content, 0xFF, 16);
+	_memcpy(content+address, buf, len);
+	result = WriteKEY2(content);
+
+    return (result? 0 : -1);
 }
 
 

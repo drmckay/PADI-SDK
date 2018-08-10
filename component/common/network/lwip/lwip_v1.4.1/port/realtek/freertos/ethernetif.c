@@ -106,6 +106,11 @@ static void low_level_init(struct netif *netif)
 	/* Accept broadcast address and ARP traffic */
 	netif->flags = NETIF_FLAG_BROADCAST | NETIF_FLAG_ETHARP;	     
 
+#if LWIP_IGMP
+	/* make LwIP_Init do igmp_start to add group 224.0.0.1 */
+	netif->flags |= NETIF_FLAG_IGMP;
+#endif
+
 	/* Wlan interface is initialized later */
 }
 

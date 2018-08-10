@@ -95,7 +95,7 @@ HAL_GPIO_Init(
     port_num = HAL_GPIO_GET_PORT_BY_NAME(GPIO_Pin->pin_name);
     pin_num = HAL_GPIO_GET_PIN_BY_NAME(GPIO_Pin->pin_name);
     chip_pin = GPIO_GetChipPinName_8195a(port_num, pin_num);
-    if (GpioFunctionChk(chip_pin, ENABLE) == _FALSE) {
+    if ((_PA_0 != chip_pin) && (GpioFunctionChk(chip_pin, ENABLE) == _FALSE)) {
         DBG_GPIO_ERR("HAL_GPIO_Init: GPIO Pin(%x) Unavailable\n ", chip_pin);
         return;
     }

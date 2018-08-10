@@ -619,6 +619,8 @@ void vApplicationIdleHook( void )
 	saving could be achieved by not including any demo tasks that never block. */
 }
 
+#include <platform_stdlib.h>
+
 void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName )
 {
 	/* This function will be called if a task overflows its stack, if
@@ -626,7 +628,7 @@ void vApplicationStackOverflowHook( xTaskHandle pxTask, signed char *pcTaskName 
 	parameters have been corrupted, depending on the severity of the stack
 	overflow.  When this is the case pxCurrentTCB can be inspected in the
 	debugger to find the offending task. */
-//	DiagPrintf("\n\r[%s] STACK OVERFLOW - TaskName(%s)\n\r", __FUNCTION__, pcTaskName);
+	printf("\n\r[%s] STACK OVERFLOW - TaskName(%s)\n\r", __FUNCTION__, pcTaskName);
 	for( ;; );
 }
 

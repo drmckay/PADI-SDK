@@ -2,12 +2,10 @@
 #define WSCLIENT_H
 #include <websocket/libwsclient.h>
 
-
 /******Define the maximum bytes of data send and receive********/
 #define MAX_DATA_LEN	1500
 /****************Define if using the polarssl*******************/
 #define USING_SSL
-
 
 /******************Define the function used*********************/
 #ifdef USING_SSL
@@ -18,9 +16,6 @@ int ws_set_fun_ops(wsclient_context *wsclient);
 #define wsclient_set_fun_ops(wsclient) ws_set_fun_ops(wsclient)
 #endif
 /***************************************************************/
-
-
-
 
 /*************************************************************************************************
 ** Function Name  : create_wsclient

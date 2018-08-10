@@ -1,44 +1,64 @@
-#include "osdep_api.h"
+#include "osdep_service.h"
 #include "serial_api.h"
 #include <timer_api.h>
 #include "freertos_pmu.h"
 #include <mDNS/mDNS.h>
+#include "gpio_api.h"
+#include "gpio_irq_api.h"
+#include "PinNames.h"
 /******************************************************
  *                    Macros
  ******************************************************/
-#define UA_ERROR		0
-#define UA_WARNING 	1
-#define UA_INFO		       2
-#define UA_DEBUG		3
-#define UA_NONE		       0xFF
-#define UA_DEBUG_LEVEL UA_INFO
+#define	UA_ERROR		0
+#define	UA_WARNING		1
+#define	UA_INFO			2
+#define	UA_DEBUG		3
+#define	UA_NONE			0xFF
+#define	UA_DEBUG_LEVEL	UA_INFO
 
-#define	UA_UART_THREAD_PRIORITY	 5
-#define	UA_UART_THREAD_STACKSIZE 512
+#define	UA_UART_THREAD_PRIORITY		5
+#define	UA_UART_THREAD_STACKSIZE	512
 
-#define	UA_TCP_SERVER_FD_NUM	1
-#define   UA_TCP_CLIENT_FD_NUM	       1
+#define	UA_TCP_SERVER_FD_NUM		1
+#define	UA_TCP_CLIENT_FD_NUM		1
 
-#define 	UA_UART_RECV_BUFFER_LEN	8196
-#define 	UA_UART_FRAME_LEN	       1400
-#define	UA_UART_MAX_DELAY_TIME   100
+#define	UA_UART_RECV_BUFFER_LEN		8196
+#define	UA_UART_FRAME_LEN			1400
+#define	UA_UART_MAX_DELAY_TIME		100
 
-#define	UA_CHAT_SOCKET_PORT           5001
-#define	UA_CONTROL_SOCKET_PORT	 6001
+#define	UA_CHAT_SOCKET_PORT			5001
+#define	UA_CONTROL_SOCKET_PORT		6001
 
-#define	UA_UART_TX_PIN        PA_7
-#define	UA_UART_RX_PIN        PA_6
+#define	UA_SC_SOFTAP_EN			1
 
-#define	UA_GPIO_LED_PIN        	PC_5
-#define	UA_GPIO_IRQ_PIN        	PC_4
+#ifdef CONFIG_PLATFORM_8195A
+#define	UA_UART_TX_PIN			PA_7
+#define	UA_UART_RX_PIN			PA_6
+
+#define	UA_GPIO_LED_PIN			PC_5
+#define	UA_GPIO_IRQ_PIN			PC_4
+
+#define	UA_GPIO_TIMER			TIMER0
+#define	UA_GPIO_WAKEUP_PIN		PC_3
+#endif
+#ifdef CONFIG_PLATFORM_8711B
+#define	UA_UART_TX_PIN		PA_23
+#define	UA_UART_RX_PIN		PA_18
+
+#define	UA_GPIO_LED_PIN        	PA_5
+#define	UA_GPIO_IRQ_PIN        	PA_12
+
+#define	UA_GPIO_TIMER 		TIMER2
+#define	UA_GPIO_WAKEUP_PIN	PA_0
+#endif
 
 #define	UA_CONTROL_PREFIX     "AMEBA_UART"
 
 #define	UA_PS_ENABLE                 0
-#define	UA_GPIO_WAKEUP_PIN	PC_3
-#define	UA_WAKELOCK                 WAKELOCK_USER_BASE
 
-#define	UA_FAST_RECONNECT_TCP_DATA (0x80000 - 0x2000)
+#define	UA_WAKELOCK                 PMU_DEV_USER_BASE
+
+#define	UA_FAST_RECONNECT_TCP_DATA (0xF5000 + 0x1000)
 
 
 #if (UA_DEBUG_LEVEL== UA_NONE)
@@ -48,14 +68,14 @@
 do {\
 	if (level <= UA_DEBUG_LEVEL) {\
 		if (level <= UA_ERROR) {\
-			RtlDownSema(&ua_print_sema);\
+			rtw_down_sema(&ua_print_sema);\
 			printf("\r\nERROR: " fmt, ##arg);\
-			RtlUpSema(&ua_print_sema);\
+			rtw_up_sema(&ua_print_sema);\
 		} \
 		else {\
-			RtlDownSema(&ua_print_sema);\
+			rtw_down_sema(&ua_print_sema);\
 			printf("\r\n"fmt, ##arg);\
-			RtlUpSema(&ua_print_sema);\
+			rtw_up_sema(&ua_print_sema);\
 		} \
 	}\
 }while(0)
@@ -121,19 +141,6 @@ typedef enum
 	UART_CTRL_TYPE_TCP_GROUP_ID = 0x100,	
 }ua_ctrl_type_t;
 
-enum sc_result {
-	SC_ERROR = -1,	/* default error code*/
-	SC_NO_CONTROLLER_FOUND = 1, /* cannot get sta(controller) in the air which starts a simple config session */
-	SC_CONTROLLER_INFO_PARSE_FAIL, /* cannot parse the sta's info  */
-	SC_TARGET_CHANNEL_SCAN_FAIL, /* cannot scan the target channel */
-	SC_JOIN_BSS_FAIL, /* fail to connect to target ap */
-	SC_DHCP_FAIL, /* fail to get ip address from target ap */
-	 /* fail to create udp socket to send info to controller. note that client isolation
-		must be turned off in ap. we cannot know if ap has configured this */
-	SC_UDP_SOCKET_CREATE_FAIL,
-	SC_SUCCESS,	/* default success code */
-};
-
 /******************************************************
  *                   Structures
  ******************************************************/
@@ -171,9 +178,9 @@ typedef struct _ua_uart_socket_t
 	serial_t uart_sobj;	
 	ua_uart_param_t uart_param;
 	
-	_Sema action_sema;	
-	_Sema tcp_tx_rx_sema;
-	_Sema dma_tx;	
+	_sema action_sema;	
+	_sema tcp_tx_rx_sema;
+	_sema dma_tx;	
 }ua_uart_socket_t;
 
 typedef struct _ua_tcp_socket_t

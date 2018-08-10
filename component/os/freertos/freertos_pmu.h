@@ -8,25 +8,55 @@
 #ifndef BIT
 #define BIT(n)                   (1<<n)
 #endif
-// wakelock for system usage
-#define WAKELOCK_OS              BIT(0)
-#define WAKELOCK_WLAN            BIT(1)
-#define WAKELOCK_LOGUART         BIT(2)
-#define WAKELOCK_SDIO_DEVICE     BIT(3)
 
-// wakelock for user defined
-#define WAKELOCK_USER_BASE       BIT(16)
-
-#if 0
-#define DEFAULT_WAKELOCK         (0)
-#else
-// default locked by OS and not to sleep until OS release wakelock in somewhere
-#define DEFAULT_WAKELOCK         (WAKELOCK_OS)
-#endif
-
+#ifdef CONFIG_PLATFORM_8195A
 #define DEFAULT_WAKEUP_EVENT (SLEEP_WAKEUP_BY_STIMER | SLEEP_WAKEUP_BY_GTIMER | SLEEP_WAKEUP_BY_GPIO_INT | SLEEP_WAKEUP_BY_WLAN)
 
-typedef void (*freertos_sleep_callback)( unsigned int );
+typedef enum PMU_DEVICE {
+
+    PMU_OS = 0,
+    PMU_WLAN_DEVICE = 1,
+    PMU_LOGUART_DEVICE = 2,
+    PMU_SDIO_DEVICE = 3,
+
+    PMU_DEV_USER_BASE= 16,
+
+    PMU_MAX = 31
+
+} PMU_DEVICE;
+#endif
+
+#ifdef CONFIG_PLATFORM_8711B
+typedef enum {
+	PMU_OS					=0,
+	PMU_WLAN_DEVICE		=1,
+	PMU_LOGUART_DEVICE	=2,
+	PMU_SDIO_DEVICE		=3,
+
+	PMU_UART0_DEVICE		=4,
+	PMU_UART1_DEVICE		=5,
+	PMU_I2C0_DEVICE		=6,
+	PMU_I2C1_DEVICE		=7,
+	PMU_USOC_DEVICE		=8,
+	PMU_DONGLE_DEVICE	=9,
+	PMU_RTC_DEVICE		=10,
+	PMU_CONSOL_DEVICE	=11,
+	PMU_ADC_DEVICE	=12,
+	PMU_DEV_USER_BASE	=16,
+
+	PMU_MAX				=31
+} PMU_DEVICE;
+
+enum SLEEP_TYPE {
+	SLEEP_PG	= 0,
+	SLEEP_CG	= 1,
+};
+#endif
+
+// default locked by OS and not to sleep until OS release wakelock in somewhere
+#define DEFAULT_WAKELOCK         (BIT(PMU_OS))
+
+typedef uint32_t (*PSM_HOOK_FUN)( unsigned int, void* param_ptr );
 
 /** Acquire wakelock
  *
@@ -36,25 +66,30 @@ typedef void (*freertos_sleep_callback)( unsigned int );
  *
  *  If wakelock is not equals to 0, then the system won't enter sleep.
  *
- *  @param lock_id        : The bit which is attempt to add into wakelock
+ *  @param nDeviceId        : The bit which is attempt to add into wakelock
  */
-void acquire_wakelock(uint32_t lock_id);
+void pmu_acquire_wakelock(uint32_t nDeviceId);
 
 /** Release wakelock
  *
  *  If wakelock equals to 0, then the system may enter sleep state if it is in idle state.
  *
- *  @param lock_id        : The bit which is attempt to remove from wakelock
+ *  @param nDeviceId        : The bit which is attempt to remove from wakelock
  */
-void release_wakelock(uint32_t lock_id);
+void pmu_release_wakelock(uint32_t nDeviceId);
 
 /** Get current wakelock bit map value
  *
  *  @return               : the current wakelock bit map value
  */
-uint32_t get_wakelock_status();
+uint32_t pmu_get_wakelock_status(void);
 
 #if (configGENERATE_RUN_TIME_STATS == 1)
+
+/** enable to keep wakelock stats
+ *
+ */
+void pmu_enable_wakelock_stats( unsigned char enable );
 
 /** Get text report that contain the statics of wakelock holding time
  *
@@ -63,54 +98,39 @@ uint32_t get_wakelock_status();
  *
  *  @param pcWriteBuffer  : The char buffer that contain the report
  */
-void get_wakelock_hold_stats( char *pcWriteBuffer );
+void pmu_get_wakelock_hold_stats( char *pcWriteBuffer );
 
 /** Recalculate the wakelock statics
  *
  *  By default the wakelock statics is calculated from system boot up.
  *  If we want to debug power saving killer from a specified timestamp, we can reset the statics.
  */
-void clean_wakelock_stat();
+void pmu_clean_wakelock_stat(void);
 
 #endif
 
-void add_wakeup_event(uint32_t event);
-void del_wakeup_event(uint32_t event);
+/**
+  * @brief  set system active time, system can not sleep beore timeout.
+  * @param  nDeviceId: PMU_DEVICE 
+  * @param  timeout: system can not sleep beore timeout, unit is ms.
+  * @retval status value:
+  *          - 0: _FAIL
+  *          - 1: _SUCCESS   
+  */
+uint32_t pmu_set_sysactive_time(uint32_t nDeviceId, uint32_t timeout);
 
-/** Register sleep callback
- *
- *  Pre-sleep callbacks are called before entering sleep.
- *  Post-sleep callbacks are called after resume.
- *
- *  @param is_pre_sleep   : Indicate the sleep_cb is for pre-sleep or post-sleep
- *  @param sleep_cb       : The callback function which is called before/after sleep
- *  @param module         : The callback is assigned according to the bit specify in bit field of param module
- *                          The bit 15 (0x00008000) is used for unspecified callback.
- */
-void register_sleep_callback_by_module( unsigned char is_pre_sleep, freertos_sleep_callback sleep_cb, uint32_t module );
+void pmu_add_wakeup_event(uint32_t event);
+void pmu_del_wakeup_event(uint32_t event);
 
-/** Register unspecified pre sleep callback
- *
- *  Pre-sleep callbacks are called before entering sleep.
- *
- *  @param pre_sleep_cb   : The callback function which is called before sleep
- *                          It is registed in bit 15 (0x00008000) of module list
- */
-void register_pre_sleep_callback( freertos_sleep_callback pre_sleep_cb );
+void pmu_register_sleep_callback(uint32_t nDeviceId, PSM_HOOK_FUN sleep_hook_fun, void* sleep_param_ptr, PSM_HOOK_FUN wakeup_hook_fun, void* wakeup_param_ptr);
+void pmu_unregister_sleep_callback(uint32_t nDeviceId);
 
-/** Register unspecified post sleep callback
- *
- *  Post-sleep callbacks are called before entering sleep.
- *
- *  @param post_sleep_cb  : The callback function which is called after sleep
- *                          It is registed in bit 15 (0x00008000) of module list
- */
-void register_post_sleep_callback( freertos_sleep_callback post_sleep_cb );
-
+#ifdef CONFIG_PLATFORM_8195A
 /** Set PLL reserved or not when sleep is called
  *
  *  @param reserve: true for sleep with PLL reserve
  */
-void set_pll_reserved(unsigned char reserve);
+void pmu_set_pll_reserved(unsigned char reserve);
+#endif
 
 #endif

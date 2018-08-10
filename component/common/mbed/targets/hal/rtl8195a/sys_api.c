@@ -26,6 +26,7 @@
 #define OTA_Signature_len		8
 #define OTA_Signature_offset	8
 #define OTA_valid_offset		0x100000
+#undef printf
 #define printf					DiagPrintf
 
 #if !defined(__ICCARM__)

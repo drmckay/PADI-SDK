@@ -2,7 +2,7 @@
 #include "task.h"
 #include "wifi_conf.h"
 #include "wifi_ind.h"
-#include "google_nest.h"
+#include "google/google_nest.h"
 #include "flash_api.h"
 #include "wigadget.h"
 #include <lwip/netif.h>
@@ -40,24 +40,24 @@ void cloud_link_task(void *param){
 #if PSEUDO_DATA
 			sprintf(i,"%.2f", temperature++);
 			sprintf(j, "%.2f", humidity++);
-                        if(temperature > 60)
-                          temperature = 1.123f;
-                        if(humidity > 98)
-                          humidity = 2.456f;                        
+			if(temperature > 60)
+				temperature = 1.123f;
+			if(humidity > 98)
+				humidity = 2.456f;                        
 #else
 			ret = SHTC_GetTempAndHumi(&temperature, &humidity);
-			sprintf(i,"%.2f", temperature);
+			sprintf(i, "%.2f", temperature);
 			sprintf(j, "%.2f", humidity);
 #endif
 			if(ret < 0)
 				printf("\r\n\r\n<-----LOCAL LINK FAILED!!(get infor failed)\r\n\r\n");
 			else{
-				gen_json_data(i,j, data);
+				gen_json_data(i, j, data);
 	            printf("\r\nCLOUD-LINK--Sending data : \r\n%s\r\n", data);
 				memset(&googlenest, 0, sizeof(googlenest_context));
 				if(gn_connect(&googlenest, host_addr, CLOUD_PORT) == 0) {
 					if(gn_put(&googlenest, URI, data) != 0)
-		                        	printf("\r\n\r\nPUT data failed!\r\n\r\n");
+						printf("\r\n\r\nPUT data failed!\r\n\r\n");
 					gn_close(&googlenest);
 					printf("\r\n\r\n<=====CLOUD LINK OK!!\r\n\r\n");
 				}

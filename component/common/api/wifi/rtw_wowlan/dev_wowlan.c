@@ -75,7 +75,7 @@ int dev_wowlan_wakeup_process(void){
 #if defined(CONFIG_WOWLAN_DEV_NT96658) || defined(CONFIG_WOWLAN_DEV_OV788)
 #if defined(configUSE_WAKELOCK_PMU) && (configUSE_WAKELOCK_PMU == 1)
 	//acquire wakelock to keep system awake
-	acquire_wakelock(WAKELOCK_SDIO_DEVICE);
+	pmu_acquire_wakelock(PMU_SDIO_DEVICE);
 #endif	
 #endif
 

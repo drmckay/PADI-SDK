@@ -114,6 +114,7 @@ task.h is included from an application file. */
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "platform_opts.h"
 
 #undef MPU_WRAPPERS_INCLUDED_FROM_API_FILE
 
@@ -172,18 +173,24 @@ static unsigned char ucHeap[ configTOTAL_HEAP_SIZE ];
 #if (defined CONFIG_PLATFORM_8195A)
 HeapRegion_t xHeapRegions[] =
 {
-	{ (uint8_t*)0x10002300, 0x3D00 }, 	// Image1 recycle heap
-	{ ucHeap, sizeof(ucHeap) },	        // Defines a block from ucHeap
+	{ (uint8_t*)0x10002300, 0x3D00 },	// Image1 recycle heap
+	{ ucHeap, sizeof(ucHeap) }, 		// Defines a block from ucHeap
 #if 0
-	{ (uint8_t*)0x301b5000, 300*1024 },	// SDRAM heap
+	{ (uint8_t*)0x301b5000, 300*1024 }, // SDRAM heap
 #endif        
-	{ NULL, 0 }                             // Terminates the array.
+	{ NULL, 0 } 							// Terminates the array.
 };
 #elif (defined CONFIG_PLATFORM_8711B)
+#include "rtl8710b_boot.h"
+extern BOOT_EXPORT_SYMB_TABLE boot_export_symbol;
 HeapRegion_t xHeapRegions[] =
 {
+	{ 0, 0},	// Image1 reserved ,length will be corrected in pvPortMalloc()
 	{ ucHeap, sizeof(ucHeap) }, 	// Defines a block from ucHeap
-	{ NULL, 0 }                // Terminates the array.
+#if (CONFIG_ENABLE_RDP == 0)	
+	{ (uint8_t*)0x1003f000, 0x1000},	// RDP reserved
+#endif	
+	{ NULL, 0 } 					// Terminates the array.
 };
 #else
 #error NOT SUPPORT CHIP
@@ -217,6 +224,10 @@ void *pvReturn = NULL;
 	/* Realtek test code start */
 	if(pxEnd == NULL)
 	{
+#if (defined CONFIG_PLATFORM_8711B)
+		xHeapRegions[ 0 ].xSizeInBytes = (uint32_t)((uint8_t*)0x10005000 - (uint8_t*)boot_export_symbol.boot_ram_end);
+		xHeapRegions[ 0 ].pucStartAddress = (uint8_t*)boot_export_symbol.boot_ram_end;
+#endif		
 		vPortDefineHeapRegions( xHeapRegions );
 	}
 	/* Realtek test code end */
@@ -527,7 +538,7 @@ const HeapRegion_t *pxHeapRegion;
 			/* Adjust the size for the bytes lost to alignment. */
 			xTotalRegionSize -= ulAddress - ( uint32_t ) pxHeapRegion->pucStartAddress;
 		}
-		
+
 		pucAlignedHeap = ( uint8_t * ) ulAddress;
 
 		/* Set xStart if it has not already been set. */

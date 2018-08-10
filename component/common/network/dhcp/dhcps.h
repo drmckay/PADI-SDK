@@ -10,10 +10,15 @@
 
 #include <platform/platform_stdlib.h>
 
+#define CONFIG_DHCPS_KEPT_CLIENT_INFO
+
+#define DHCP_POOL_START			100
+#define DHCP_POOL_END			200
+
+#define DHCPS_MAX_CLIENT_NUM 	(DHCP_POOL_END-DHCP_POOL_START+1)
 
 #define IS_USE_FIXED_IP	0
 #define debug_dhcps 0
-#define DHCPS_IP_RANGE_FROM_1_to_255 1
 
 /* dhcp server states */
 #define DHCP_SERVER_STATE_OFFER 			(1)
@@ -93,14 +98,15 @@ struct dhcp_msg {
 
 /* use this to check whether the message is dhcp related or not */
 static const uint8_t dhcp_magic_cookie[4] = {99, 130, 83, 99};
-static const uint8_t dhcp_option_lease_time_one_day[] = {0x00, 0x01, 0x51, 0x80}; 
-static const uint8_t dhcp_option_interface_mtu_576[] = {0x02, 0x40};
+static const uint8_t dhcp_option_lease_time[] = {0x00, 0x00, 0x1c, 0x20}; //1 day
+//static const uint8_t dhcp_option_lease_time[] = {0x00, 0x00, 0x0e, 0x10}; // one hour
+//static const uint8_t dhcp_option_interface_mtu_576[] = {0x02, 0x40};
+static const uint8_t dhcp_option_interface_mtu[] = {0x05, 0xDC};
 
 struct table {
-#if DHCPS_IP_RANGE_FROM_1_to_255
 	uint32_t ip_range[8];
-#else
-	uint32_t ip_range[4];
+#ifdef CONFIG_DHCPS_KEPT_CLIENT_INFO
+	uint8_t client_mac[256][6];
 #endif
 };
 
@@ -117,7 +123,6 @@ struct address_pool{
 #define MARK_RANGE3_IP_BIT(table, ip)	((table.ip_range[2]) | (1 << ((ip) - 1)))
 /* 97~128 */
 #define MARK_RANGE4_IP_BIT(table, ip)	((table.ip_range[3]) | (1 << ((ip) - 1)))
-#if DHCPS_IP_RANGE_FROM_1_to_255
 /* 129~160 */
 #define MARK_RANGE5_IP_BIT(table, ip)	((table.ip_range[4]) | (1 << ((ip) - 1)))	 
 /* 161~192 */
@@ -126,7 +131,6 @@ struct address_pool{
 #define MARK_RANGE7_IP_BIT(table, ip)	((table.ip_range[6]) | (1 << ((ip) - 1)))
 /* 225~255 */
 #define MARK_RANGE8_IP_BIT(table, ip)	((table.ip_range[7]) | (1 << ((ip) - 1)))
-#endif
 
 /* expose API */
 void dhcps_set_addr_pool(int addr_pool_set, struct ip_addr * addr_pool_start, struct ip_addr *addr_pool_end);

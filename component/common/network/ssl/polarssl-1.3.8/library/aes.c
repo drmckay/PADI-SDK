@@ -501,7 +501,6 @@ int aes_setkey_enc( aes_context *ctx, const unsigned char *key,
         }
 
         memcpy(ctx->enc_key, key, (keysize / 8));
-        return 0;
     }
 #endif /* RTL_HW_CRYPTO */
 #ifdef SUPPORT_HW_SW_CRYPTO
@@ -609,10 +608,9 @@ int aes_setkey_enc( aes_context *ctx, const unsigned char *key,
                 }
                 break;
         }
-
-        return( 0 );
     }
 #endif /* SUPPORT_HW_SW_CRYPTO */
+	return( 0 );
 }
 
 /*
@@ -621,6 +619,7 @@ int aes_setkey_enc( aes_context *ctx, const unsigned char *key,
 int aes_setkey_dec( aes_context *ctx, const unsigned char *key,
                     unsigned int keysize )
 {
+	int ret=0;
 #ifdef RTL_HW_CRYPTO
     if(rom_ssl_ram_map.use_hw_crypto_func)
     {
@@ -633,13 +632,12 @@ int aes_setkey_dec( aes_context *ctx, const unsigned char *key,
         }
 
         memcpy(ctx->dec_key, key, (keysize / 8));
-        return 0;
     }
 #endif /* RTL_HW_CRYPTO */
 #ifdef SUPPORT_HW_SW_CRYPTO
     else
     {
-        int i, j, ret;
+        int i, j;
         aes_context cty;
         uint32_t *RK;
         uint32_t *SK;
@@ -696,10 +694,9 @@ int aes_setkey_dec( aes_context *ctx, const unsigned char *key,
 
 exit:
         aes_free( &cty );
-
-        return( ret );
     }
 #endif /* SUPPORT_HW_SW_CRYPTO */
+	return ( ret );
 }
 
 #define AES_FROUND(X0,X1,X2,X3,Y0,Y1,Y2,Y3)     \
@@ -760,28 +757,21 @@ int aes_crypt_ecb( aes_context *ctx,
     if(rom_ssl_ram_map.use_hw_crypto_func)
     {
         unsigned char key_buf[32 + 4], *key_buf_aligned;
-        unsigned char *output_buf[16 + 4], *output_buf_aligned;
 
         key_buf_aligned = (unsigned char *) (((unsigned int) key_buf + 4) / 4 * 4);
-        output_buf_aligned = (unsigned char *) (((unsigned int) output_buf + 4) / 4 * 4);
-        memset(output_buf, 0, 16 + 4);
 
         if(mode == AES_DECRYPT)
         {
             memcpy(key_buf_aligned, ctx->dec_key, ((ctx->nr - 6) * 4));
             rom_ssl_ram_map.hw_crypto_aes_ecb_init(key_buf_aligned, ((ctx->nr - 6) * 4));
-            rom_ssl_ram_map.hw_crypto_aes_ecb_decrypt(input, 16, NULL, 0, output_buf_aligned);
+            rom_ssl_ram_map.hw_crypto_aes_ecb_decrypt(input, 16, NULL, 0, output);
         }
         else
         {
             memcpy(key_buf_aligned, ctx->enc_key, ((ctx->nr - 6) * 4));
             rom_ssl_ram_map.hw_crypto_aes_ecb_init(key_buf_aligned,((ctx->nr - 6) * 4));
-            rom_ssl_ram_map.hw_crypto_aes_ecb_encrypt(input, 16, NULL, 0, output_buf_aligned);
+            rom_ssl_ram_map.hw_crypto_aes_ecb_encrypt(input, 16, NULL, 0, output);
         }
-
-        memcpy(output, output_buf_aligned, 16);
-
-        return 0;
     }
 #endif /* RTL_HW_CRYPTO */
 #ifdef SUPPORT_HW_SW_CRYPTO
@@ -888,9 +878,10 @@ int aes_crypt_ecb( aes_context *ctx,
         PUT_UINT32_LE( X2, output,  8 );
         PUT_UINT32_LE( X3, output, 12 );
 
-        return( 0 );
+
     }
 #endif /* SUPPORT_HW_SW_CRYPTO */
+	return( 0 );
 }
 
 #if defined(POLARSSL_CIPHER_MODE_CBC)
@@ -909,7 +900,6 @@ int aes_crypt_cbc( aes_context *ctx,
     {
         unsigned char key_buf[32 + 4], *key_buf_aligned;
         unsigned char iv_buf[16 + 4], *iv_buf_aligned, iv_tmp[16];
-        unsigned char *output_buf, *output_buf_aligned;
         size_t length_done = 0;
 
         if(length % 16)
@@ -919,14 +909,8 @@ int aes_crypt_cbc( aes_context *ctx,
         {
             key_buf_aligned = (unsigned char *) (((unsigned int) key_buf + 4) / 4 * 4);
             iv_buf_aligned = (unsigned char *) (((unsigned int) iv_buf + 4) / 4 * 4);
-            output_buf = polarssl_malloc(length + 4);
 
-            if(output_buf == NULL)
-                return -1;
-
-            output_buf_aligned = (unsigned char *) (((unsigned int) output_buf + 4) / 4 * 4);
             memcpy(iv_buf_aligned, iv, 16);
-            memset(output_buf, 0, length + 4);
 
             if(mode == AES_DECRYPT)
             {
@@ -936,13 +920,13 @@ int aes_crypt_cbc( aes_context *ctx,
                 while((length - length_done) > RTL_CRYPTO_FRAGMENT)
                 {
                     memcpy(iv_tmp, (input + length_done + RTL_CRYPTO_FRAGMENT - 16), 16);
-                    rom_ssl_ram_map.hw_crypto_aes_cbc_decrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 16, output_buf_aligned + length_done);
+                    rom_ssl_ram_map.hw_crypto_aes_cbc_decrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 16, output + length_done);
                     memcpy(iv_buf_aligned, iv_tmp, 16);
                     length_done += RTL_CRYPTO_FRAGMENT;
                 }
 
                 memcpy(iv_tmp, (input + length - 16), 16);
-                rom_ssl_ram_map.hw_crypto_aes_cbc_decrypt(input + length_done, length - length_done, iv_buf_aligned, 16, output_buf_aligned + length_done);
+                rom_ssl_ram_map.hw_crypto_aes_cbc_decrypt(input + length_done, length - length_done, iv_buf_aligned, 16, output + length_done);
                 memcpy(iv, iv_tmp, 16);
             }
             else
@@ -952,20 +936,15 @@ int aes_crypt_cbc( aes_context *ctx,
 
                 while((length - length_done) > RTL_CRYPTO_FRAGMENT)
                 {
-                    rom_ssl_ram_map.hw_crypto_aes_cbc_encrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 16, output_buf_aligned + length_done);
-                    memcpy(iv_buf_aligned, (output_buf_aligned + length_done + RTL_CRYPTO_FRAGMENT - 16), 16);
+                    rom_ssl_ram_map.hw_crypto_aes_cbc_encrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 16, output + length_done);
+                    memcpy(iv_buf_aligned, (output + length_done + RTL_CRYPTO_FRAGMENT - 16), 16);
                     length_done += RTL_CRYPTO_FRAGMENT;
                 }
 
-                rom_ssl_ram_map.hw_crypto_aes_cbc_encrypt(input + length_done, length - length_done, iv_buf_aligned, 16, output_buf_aligned + length_done);
-                memcpy(iv, (output_buf_aligned + length - 16), 16);
+                rom_ssl_ram_map.hw_crypto_aes_cbc_encrypt(input + length_done, length - length_done, iv_buf_aligned, 16, output + length_done);
+                memcpy(iv, (output + length - 16), 16);
             }
-
-            memcpy(output, output_buf_aligned, length);
-            polarssl_free(output_buf);
         }
-
-        return 0;
     }
 #endif /* RTL_HW_CRYPTO */
 #ifdef SUPPORT_HW_SW_CRYPTO
@@ -1021,10 +1000,9 @@ int aes_crypt_cbc( aes_context *ctx,
                 length -= 16;
             }
         }
-
-        return( 0 );
     }
 #endif /* SUPPORT_HW_SW_CRYPTO */
+	        return( 0 );
 }
 #endif /* POLARSSL_CIPHER_MODE_CBC */
 

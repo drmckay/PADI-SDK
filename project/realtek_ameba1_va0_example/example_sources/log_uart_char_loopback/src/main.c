@@ -27,7 +27,7 @@ void main(void)
     // sample text
     char rc;
 	// Initial Log UART: BaudRate=115200, 8-bits, No Parity, 1 Stop bit
-    log_uart_init(&uobj, 38400, 8, ParityNone, 1);
+    log_uart_init(&uobj, 115200, 8, ParityNone, 1);
 
     uart_send_string(&uobj, "UART API Demo...\r\n");
     uart_send_string(&uobj, "Hello World!!\r\n");

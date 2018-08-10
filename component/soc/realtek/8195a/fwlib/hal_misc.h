@@ -18,6 +18,10 @@
 #define CHIP_ID_8710AF      0xFC
 #define CHIP_ID_8711AN      0xFB
 #define CHIP_ID_8710AM      0xFA
+#define CHIP_ID_SIP         0xF9  
+#define CHIP_ID_COMBO_SIP   0xF8
+#define CHIP_ID_SIP2        0xF7
+#define CHIP_ID_MICO100     0xF1
 
 enum _HAL_RESET_REASON{
 	REASON_DEFAULT_RST = 0,         /**< normal startup by power on */
@@ -50,6 +54,5 @@ extern _LONG_CALL_ROM_ int _strcmp(const char *cs, const char *ct);
 
 VOID HalSetResetCause(IN HAL_RESET_REASON reason);
 HAL_RESET_REASON HalGetResetCause(VOID);
-
 
 #endif  //_MISC_H_

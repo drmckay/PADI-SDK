@@ -112,9 +112,6 @@ ip_addr_t current_iphdr_dest;
 /** The IP header ID of the next outgoing IP packet */
 static u16_t ip_id;
 
-/** The flag indicating whether the ethernet/mii is the default interface */
-extern int ethernet_if_default;
-
 /**
  * Finds the appropriate network interface for a given IP address. It
  * searches the list of network interfaces linearly. A match is found
@@ -142,23 +139,11 @@ ip_route(ip_addr_t *dest)
     /* network mask matches? */
     if (netif_is_up(netif)) {
       if (ip_addr_netcmp(dest, &(netif->ip_addr), &(netif->netmask))) {
-        /* return netif on which to forward IP packet */
-#if CONFIG_ETHERNET
-        if(ethernet_if_default == 1)
-          last_netif = netif;
-        else
-        	return netif;
-#else        
-        return netif;
-#endif        
+        /* return netif on which to forward IP packet */       
+		return netif;       
       }
     }
   }
-
-#if CONFIG_ETHERNET
-  if(ethernet_if_default == 1 && last_netif != NULL)
-  	return last_netif;
-#endif  
     
   if ((netif_default == NULL) || (!netif_is_up(netif_default))) {
     LWIP_DEBUGF(IP_DEBUG | LWIP_DBG_LEVEL_SERIOUS, ("ip_route: No route to %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",

@@ -3454,14 +3454,12 @@ int ssl_init( ssl_context *ssl )
 
     if( ( ret = ssl_handshake_init( ssl ) ) != 0 )
         return( ret );
-
     /*
-    move the cryptoEngine from main to here
+    move the cryptoEngine from main funtion to here
     */
     if ( rtl_cryptoEngine_init() != 0 ) {
         DiagPrintf("crypto engine init failed\r\n");
     }
-
 
     return( 0 );
 }

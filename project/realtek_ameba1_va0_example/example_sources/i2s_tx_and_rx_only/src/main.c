@@ -11,7 +11,7 @@
   * @param  None
   * @retval None
   */
-#include "alc5651.c"
+#include "alc5651.h"
 
 i2s_t i2s_obj;
 
@@ -89,6 +89,11 @@ void main(void)
     
 	i2s_recv_page(&i2s_obj);
 	
-	while(1);
+	while(1){
+		asm volatile ("nop\n\t");//If run in non-os environment,it needs to add nop operation
+		asm volatile ("nop\n\t");
+		asm volatile ("nop\n\t");
+		asm volatile ("nop\n\t");
+	}
 
 }

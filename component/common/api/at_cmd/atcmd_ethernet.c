@@ -6,7 +6,6 @@
 #include <platform/platform_stdlib.h>
 #include <lwip/sockets.h>
 #include <lwip/tcpip.h>
-#include "wifi_conf.h"
 
 
 #define	_AT_DHCP_ETHERNET_MII_     "ATE0"

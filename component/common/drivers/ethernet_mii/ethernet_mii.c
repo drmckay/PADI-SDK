@@ -15,20 +15,25 @@
 
 static _sema mii_rx_sema;
 static _mutex mii_tx_mutex;
+extern volatile u32 ethernet_unplug;
 
 extern struct netif  xnetif[NET_IF_NUM];
 
-static u8 TX_BUFFER[1518];
-static u8 RX_BUFFER[1518];
+static u8 TX_BUFFER[1536];
+static u8 RX_BUFFER[1536];
 
 static u8 *pTmpTxDesc = NULL;
 static u8 *pTmpRxDesc = NULL;
 static u8 *pTmpTxPktBuf = NULL;
 static u8 *pTmpRxPktBuf = NULL;	
 
-
+int ethernet_init_done = 0;
 int dhcp_ethernet_mii = 1;
 int ethernet_if_default = 0;
+int link_is_up = 0;
+
+
+link_up_down_callback p_link_change_callback = 0;
 
 extern int lwip_init_done;
 
@@ -49,7 +54,7 @@ void mii_rx_thread(void* param){
 				//DBG_8195A("mii_recv len = %d\n\r", len);
 				ethernet_read(pbuf, len);
 // calculate the time duration
-				ethernetif_mii_recv(&xnetif[NET_IF_NUM - 1], len);		
+				ethernetif_mii_recv(&xnetif[ETHERNET_IDX], len);		
 				//__rtl_memDump_v1_00(pbuf, len, "ethernet_receive Data:");
 				//rtw_memset(pbuf, 0, len);
 			}else if(len == 0){
@@ -62,16 +67,47 @@ exit:
 	vTaskDelete(NULL);
 }
 
-void dhcp_start_mii(void* param)
+void mii_intr_thread(void* param)
 {
+	u32 dhcp_status = 0;
+	
 	while(1)
 	{
 		if (rtw_down_sema(&mii_linkup_sema) == _FAIL){
 			DBG_8195A("%s, Take Semaphore Fail\n", __FUNCTION__);
 			break;
 		}
-    LwIP_DHCP(NET_IF_NUM - 1, DHCP_START);
+
+		//Used to process there is no cable plugged in when power-on
+		if(1 == ethernet_unplug){
+			if(p_link_change_callback)
+				p_link_change_callback(link_is_up);
+		}
+
+		if(1 == ethernet_init_done){		
+			if(link_is_up){
+				DBG_8195A("...Link up\n");
+				if(dhcp_ethernet_mii == 1)
+		    		dhcp_status = LwIP_DHCP(ETHERNET_IDX, DHCP_START);
+				if(DHCP_ADDRESS_ASSIGNED == dhcp_status){
+					if(1 == ethernet_if_default)
+						netif_set_default(&xnetif[ETHERNET_IDX]);  //Set default gw to ether netif
+					else
+						netif_set_default(&xnetif[WLAN_IDX]);
+				}
+			}else{
+				DBG_8195A("...Link down\n");
+				netif_set_default(&xnetif[WLAN_IDX]);	//Set default gw to wlan netif
+#if CONFIG_LWIP_LAYER
+				LwIP_ReleaseIP(ETHERNET_IDX);
+#endif
+			}
+		
+			if(p_link_change_callback)
+				p_link_change_callback(link_is_up);
+		}
 	}
+	
 	rtw_free_sema(&mii_linkup_sema);
 	vTaskDelete(NULL);
 }
@@ -91,14 +127,13 @@ void mii_intr_handler(u32 Event, u32 Data)
 			break;
 		case ETH_LINKUP:
 			DBG_8195A("Link Up\n");
-			
-      if(dhcp_ethernet_mii == 1)
-			  rtw_up_sema_from_isr(&mii_linkup_sema);
-			  
+			link_is_up = 1;
+			rtw_up_sema_from_isr(&mii_linkup_sema);
 			break;
 		case ETH_LINKDOWN:
 			DBG_8195A("Link Down\n");
-			  
+			link_is_up = 0;
+			rtw_up_sema_from_isr(&mii_linkup_sema);
 			break;
 		default:
 			DBG_8195A("Unknown event !!\n");
@@ -165,7 +200,7 @@ void ethernet_demo(void* param){
 	
 	/*get mac*/
 	ethernet_address(mac);
-	memcpy((void*)xnetif[NET_IF_NUM - 1].hwaddr,(void*)mac, 6);
+	memcpy((void*)xnetif[ETHERNET_IDX].hwaddr,(void*)mac, 6);
 
 	rtw_init_sema(&mii_rx_sema,0);
 	rtw_mutex_init(&mii_tx_mutex);
@@ -173,29 +208,54 @@ void ethernet_demo(void* param){
 	if(xTaskCreate(mii_rx_thread, ((const char*)"mii_rx_thread"), 1024, NULL, tskIDLE_PRIORITY+5, NULL) != pdPASS)
 		DBG_8195A("\n\r%s xTaskCreate(mii_rx_thread) failed", __FUNCTION__);
 	
-	DBG_8195A("\nEthernet_mii Init done, interface %d",NET_IF_NUM - 1);
+	DBG_8195A("\nEthernet_mii Init done, interface %d", ETHERNET_IDX);
 	
-	if(dhcp_ethernet_mii == 1)
-	  LwIP_DHCP(NET_IF_NUM - 1, DHCP_START);
+	if(dhcp_ethernet_mii == 1){
+	  LwIP_DHCP(ETHERNET_IDX, DHCP_START);
+	  netif_set_default(&xnetif[ETHERNET_IDX]);  //Set default gw to ether netif
+	}
+	ethernet_init_done = 1;
 	
 	vTaskDelete(NULL);
 }
+
+int ethernet_is_linked()
+{
+	 if((link_is_up == 1)&&(1 == ethernet_init_done))
+		   return TRUE;
+	 else
+		   return FALSE;
+}
+
+int ethernet_is_unplug()
+{
+	if(ethernet_unplug == 1)
+		   return TRUE;
+	 else
+		   return FALSE;
+}
+
 
 void ethernet_mii_init()
 {
 	printf("\ninitializing Ethernet_mii......\n");
   
-  // set the ethernet interface as default
-  ethernet_if_default = 1;
-  rtw_init_sema(&mii_linkup_sema,0);
-  
-	if( xTaskCreate((TaskFunction_t)dhcp_start_mii, "DHCP_START_MII", 1024, NULL, 2, NULL) != pdPASS) {
+	// set the ethernet interface as default
+	ethernet_if_default = 1;
+	vSemaphoreCreateBinary(mii_linkup_sema);
+	if( xTaskCreate((TaskFunction_t)mii_intr_thread, "DHCP_START_MII", 1024, NULL, 3, NULL) != pdPASS) {
 		DBG_8195A("Cannot create demo task\n\r");
 	}	
 
 	if( xTaskCreate((TaskFunction_t)ethernet_demo, "ETHERNET DEMO", 1024, NULL, 2, NULL) != pdPASS) {
 		DBG_8195A("Cannot create demo task\n\r");
 	}
+#if 0
+	extern void ethernet_wlan_iperf_test_task(void *param);
+	if(xTaskCreate((TaskFunction_t)ethernet_wlan_iperf_test_task, "wifi_entry_task", 1024, NULL, 2, NULL) != pdPASS){
+		printf("\n\r%s xTaskCreate(wifi_entry_task) failed", __FUNCTION__);
+	}
+#endif
 	
 }
 
@@ -245,3 +305,73 @@ s8 rltk_mii_send(struct eth_drv_sg *sg_list, int sg_len, int total_len){
 
 	return ret; 	
 }
+
+#define ____TEST____
+/* used for test */
+#if 0
+#include "wifi_constants.h"
+struct iperf_data_t{
+	uint64_t total_size;
+	uint64_t bandwidth;
+	int  server_fd;
+	int  client_fd;
+	uint32_t buf_size;
+	uint32_t time;
+	uint32_t report_interval;
+	uint16_t port;
+	uint8_t  server_ip[16];
+	uint8_t  start;
+	uint8_t  tos_value;
+};
+
+/*ATWT=-c,192.168.31.111,-t,10*/
+int ethernet_wlan_iperf_test()
+{
+	char server_ip[] = "192.168.31.111";
+	u16  time = 10;
+	struct iperf_data_t tcp_client_data;
+
+	printf("\n###################ethernet wlan iperf test !!!...\n");
+	memset(&tcp_client_data, 0, sizeof(tcp_client_data));
+
+	strncpy(tcp_client_data.server_ip, server_ip, (strlen(server_ip)>16)?16:strlen(server_ip));
+	tcp_client_data.time = time;
+	tcp_client_data.bandwidth = 268459220;
+	tcp_client_data.buf_size = 1460;
+	tcp_client_data.client_fd = 0;
+	tcp_client_data.port = 5001;
+	tcp_client_data.report_interval = -1;
+	tcp_client_data.server_fd = 0;
+	tcp_client_data.start = 1;
+	tcp_client_data.tos_value = 0;
+	tcp_client_data.total_size = 0;
+	
+	tcp_client_func(tcp_client_data);
+
+	return 0;	
+}
+
+void ethernet_wlan_iperf_test_task(void *param)
+{
+	printf("\n#########################ethernet wlan iperf test task...\n");
+
+	/* used for test */
+	p_link_change_callback = (link_up_down_callback)ethernet_wlan_iperf_test;
+	
+	/*sys_reset is not necessary, upper layer can define p_link_change_callback on demand*/
+	//p_link_change_callback = (link_up_down_callback)sys_reset();
+	while(1)
+	{
+		if(((wifi_is_ready_to_transceive(RTW_STA_INTERFACE)==RTW_SUCCESS)&&ethernet_is_unplug())||(ethernet_is_linked()))
+			break;
+		else
+			vTaskDelay(500);
+	}
+	ethernet_wlan_iperf_test();
+	
+	printf("\r\n[%s] task del", __func__);
+	vTaskDelete(NULL);
+}
+
+#endif
+

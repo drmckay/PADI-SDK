@@ -599,6 +599,7 @@ HalRuartTxGdmaInit(
     pUartGdmaConfig->TxGdmaIrqHandle.IrqFun = (IRQ_FUN)_UartTxDmaIrqHandle_Patch;
 #endif
     HalRuartDmaInitRtl8195a (pHalRuartAdapter);
+    HalRuartTxGdmaDisable8195a (pHalRuartAdapter);   // default disable TX DMA
     InterruptRegister(&pUartGdmaConfig->TxGdmaIrqHandle);
     InterruptEn(&pUartGdmaConfig->TxGdmaIrqHandle);
     pUartGdmaConfig->TxDmaMBChnl = IsMultiBlk;
@@ -706,6 +707,7 @@ HalRuartRxGdmaInit(
     pUartGdmaConfig->RxGdmaIrqHandle.Priority = 11;
 
     HalRuartDmaInitRtl8195a (pHalRuartAdapter);
+    HalRuartRxGdmaDisable8195a (pHalRuartAdapter);
     InterruptRegister(&pUartGdmaConfig->RxGdmaIrqHandle);
     InterruptEn(&pUartGdmaConfig->RxGdmaIrqHandle);
     pUartGdmaConfig->RxDmaMBChnl = IsMultiBlk;
@@ -1030,6 +1032,7 @@ HalRuartDmaSend(
     }
    
     if (BlockSize < 4096) {
+        HalRuartTxGdmaEnable8195a(pHalRuartAdapter);
 #if CONFIG_CHIP_E_CUT
         ret = HalRuartDmaSendRtl8195a_V04(Data, pTxBuf, Length);
 #else
@@ -1048,6 +1051,8 @@ HalRuartDmaSend(
                 return ret;
             }
         }
+
+        HalRuartTxGdmaEnable8195a(pHalRuartAdapter);
 #if CONFIG_CHIP_E_CUT
         ret = HalRuartMultiBlkDmaSendRtl8195a_V04(Data, pTxBuf, Length);        
 #else
@@ -1079,6 +1084,7 @@ HalRuartDmaRecv(
     PHAL_GDMA_ADAPTER pHalGdmaAdapter;
     
     if (Length < 4096) {
+        HalRuartRxGdmaEnable8195a (pHalRuartAdapter);
 #if CONFIG_CHIP_E_CUT
         ret = HalRuartDmaRecvRtl8195a_V04(Data, pRxBuf, Length);
 #else
@@ -1097,6 +1103,7 @@ HalRuartDmaRecv(
                 return ret;
             }
         }
+        HalRuartRxGdmaEnable8195a (pHalRuartAdapter);
 #if CONFIG_CHIP_E_CUT
         ret = HalRuartMultiBlkDmaRecvRtl8195a_V04(Data, pRxBuf, Length);        
 #else

@@ -56,6 +56,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "device_lock.h"
 #if defined(_WIN32) && !defined(EFIX64) && !defined(EFI32)
 
 #include <windows.h>
@@ -300,6 +301,18 @@ int x509_crl_parse( x509_crl *chain, const unsigned char *buf, size_t buflen )
 
 #if defined(POLARSSL_PEM_PARSE_C)
     pem_init( &pem );
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        ret = pem_read_buffer( &pem,
+                               "-----BEGIN X509 CRL-----",
+                               "-----END X509 CRL-----",
+                               buf, NULL, 0, &use_len );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+    }
+    else
+#endif
     ret = pem_read_buffer( &pem,
                            "-----BEGIN X509 CRL-----",
                            "-----END X509 CRL-----",

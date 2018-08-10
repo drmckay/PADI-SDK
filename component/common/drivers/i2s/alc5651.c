@@ -9,8 +9,13 @@
 
 //#define I2C_MTR_SDA			PC_4//PB_3
 //#define I2C_MTR_SCL			PC_5//PB_2
-#define I2C_MTR_SDA			PB_3
-#define I2C_MTR_SCL			PB_2
+#if defined(CONFIG_PLATFORM_8195A)
+	#define I2C_MTR_SDA			PB_3
+	#define I2C_MTR_SCL			PB_2
+#elif defined(CONFIG_PLATFORM_8711B)
+	#define I2C_MTR_SDA			PA_30
+	#define I2C_MTR_SCL			PA_29
+#endif 
 #define I2C_BUS_CLK			100000  //hz
 
 #define I2C_ALC5651_ADDR	(0x34/2)

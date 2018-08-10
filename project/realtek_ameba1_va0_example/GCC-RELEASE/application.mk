@@ -1,11 +1,11 @@
 
 # Initialize tool chain
 # -------------------------------------------------------------------
-ARM_GCC_TOOLCHAIN = ../../../tools/arm-none-eabi-gcc/4.8.3-2014q1/
+ARM_GCC_TOOLCHAIN = ../../../tools/arm-none-eabi-gcc/4_8-2014q3/bin/
 AMEBA_TOOLDIR	= ../../../component/soc/realtek/8195a/misc/iar_utility/common/tools/
 FLASH_TOOLDIR = ../../../component/soc/realtek/8195a/misc/gcc_utility/
 
-CROSS_COMPILE = $(ARM_GCC_TOOLCHAIN)bin/arm-none-eabi-
+CROSS_COMPILE = $(ARM_GCC_TOOLCHAIN)/arm-none-eabi-
 
 # Compilation tools
 AR = $(CROSS_COMPILE)ar
@@ -52,6 +52,7 @@ INCLUDES += -I../../../component/os/freertos/freertos_v8.1.2/Source/include
 INCLUDES += -I../../../component/os/freertos/freertos_v8.1.2/Source/portable/GCC/ARM_CM3
 INCLUDES += -I../../../component/os/os_dep/include
 INCLUDES += -I../../../component/soc/realtek/8195a/misc/driver
+INCLUDES += -I../../../component/soc/realtek/8195a/misc/os
 INCLUDES += -I../../../component/common/api/network/include
 INCLUDES += -I../../../component/common/api
 INCLUDES += -I../../../component/common/api/platform
@@ -67,6 +68,7 @@ INCLUDES += -I../../../component/common/mbed/api
 INCLUDES += -I../../../component/common/mbed/hal
 INCLUDES += -I../../../component/common/mbed/hal_ext
 INCLUDES += -I../../../component/common/mbed/targets/hal/rtl8195a
+INCLUDES += -I../../../component/common/file_system
 INCLUDES += -I../../../component/common/network
 INCLUDES += -I../../../component/common/network/lwip/lwip_v1.4.1/port/realtek/freertos
 INCLUDES += -I../../../component/common/network/lwip/lwip_v1.4.1/src/include
@@ -78,6 +80,7 @@ INCLUDES += -I../../../component/soc/realtek/8195a/cmsis
 INCLUDES += -I../../../component/soc/realtek/8195a/cmsis/device
 INCLUDES += -I../../../component/soc/realtek/8195a/fwlib
 INCLUDES += -I../../../component/soc/realtek/8195a/fwlib/rtl8195a
+INCLUDES += -I../../../component/soc/realtek/8195a/misc/platform
 INCLUDES += -I../../../component/soc/realtek/8195a/misc/rtl_std_lib/include
 INCLUDES += -I../../../component/common/drivers/wlan/realtek/include
 INCLUDES += -I../../../component/common/drivers/wlan/realtek/src/osdep
@@ -86,6 +89,7 @@ INCLUDES += -I../../../component/common/drivers/wlan/realtek/src/hal
 INCLUDES += -I../../../component/common/drivers/wlan/realtek/src/hal/OUTSRC
 INCLUDES += -I../../../component/soc/realtek/8195a/fwlib/ram_lib/wlan/realtek/wlan_ram_map/rom
 INCLUDES += -I../../../component/common/network/ssl/polarssl-1.3.8/include
+INCLUDES += -I../../../component/common/network/ssl/mbedtls-2.4.0/include
 INCLUDES += -I../../../component/common/network/ssl/ssl_ram_map/rom
 INCLUDES += -I../../../component/common/utilities
 INCLUDES += -I../../../component/soc/realtek/8195a/misc/rtl_std_lib/include
@@ -93,7 +97,7 @@ INCLUDES += -I../../../component/common/application/apple/WACServer/External/Cur
 INCLUDES += -I../../../component/common/application/apple/WACServer/External/GladmanAES
 INCLUDES += -I../../../component/soc/realtek/8195a/fwlib/ram_lib/usb_otg/include
 INCLUDES += -I../../../component/common/video/v4l2/inc
-INCLUDES += -I../../../component/common/media/codec
+INCLUDES += -I../../../component/common/media/rtp_codec
 INCLUDES += -I../../../component/common/drivers/usb_class/host/uvc/inc
 INCLUDES += -I../../../component/common/drivers/usb_class/device
 INCLUDES += -I../../../component/common/drivers/usb_class/device/class
@@ -103,6 +107,7 @@ INCLUDES += -I../../../component/common/drivers/sdio/realtek/sdio_host/inc
 INCLUDES += -I../../../component/common/audio
 INCLUDES += -I../../../component/common/drivers/i2s
 INCLUDES += -I../../../component/common/application/xmodem
+INCLUDES += -I../../../component/common/application/mqtt/MQTTClient
 
 # Source file list
 # -------------------------------------------------------------------
@@ -113,6 +118,7 @@ DRAM_C =
 SRC_C += ../../../component/soc/realtek/8195a/cmsis/device/system_8195a.c
 
 #console
+SRC_C += ../../../component/common/api/at_cmd/atcmd_cloud.c
 SRC_C += ../../../component/common/api/at_cmd/atcmd_ethernet.c
 SRC_C += ../../../component/common/api/at_cmd/atcmd_lwip.c
 SRC_C += ../../../component/common/api/at_cmd/atcmd_sys.c
@@ -122,6 +128,7 @@ SRC_C += ../../../component/soc/realtek/8195a/misc/driver/low_level_io.c
 SRC_C += ../../../component/soc/realtek/8195a/misc/driver/rtl_consol.c
 
 #network - api
+SRC_C += ../../../component/common/api/wifi/rtw_wpa_supplicant/src/crypto/tls_polarssl.c
 SRC_C += ../../../component/common/api/wifi/rtw_wpa_supplicant/wpa_supplicant/wifi_eap_config.c
 SRC_C += ../../../component/common/api/wifi/rtw_wpa_supplicant/wpa_supplicant/wifi_p2p_config.c
 SRC_C += ../../../component/common/api/wifi/rtw_wpa_supplicant/wpa_supplicant/wifi_wps_config.c
@@ -133,13 +140,24 @@ SRC_C += ../../../component/common/api/wifi/wifi_util.c
 SRC_C += ../../../component/common/api/lwip_netconf.c
 
 #network - app
+SRC_C += ../../../component/common/application/mqtt/MQTTClient/MQTTClient.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTConnectClient.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTConnectServer.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTDeserializePublish.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTFormat.c
+SRC_C += ../../../component/common/application/mqtt/MQTTClient/MQTTFreertos.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTPacket.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTSerializePublish.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTSubscribeClient.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTSubscribeServer.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTUnsubscribeClient.c
+SRC_C += ../../../component/common/application/mqtt/MQTTPacket/MQTTUnsubscribeServer.c
+SRC_C += ../../../component/soc/realtek/8195a/misc/platform/ota_8195a.c
 SRC_C += ../../../component/common/api/network/src/ping_test.c
 SRC_C += ../../../component/common/utilities/ssl_client.c
 SRC_C += ../../../component/common/utilities/ssl_client_ext.c
 SRC_C += ../../../component/common/utilities/tcptest.c
 SRC_C += ../../../component/common/application/uart_adapter/uart_adapter.c
-SRC_C += ../../../component/common/utilities/uart_ymodem.c
-SRC_C += ../../../component/common/utilities/update.c
 SRC_C += ../../../component/common/api/network/src/wlan_network.c
 
 #network - lwip
@@ -182,9 +200,17 @@ SRC_C += ../../../component/common/network/lwip/lwip_v1.4.1/port/realtek/freerto
 SRC_C += ../../../component/common/network/dhcp/dhcps.c
 SRC_C += ../../../component/common/network/sntp/sntp.c
 
+#network - httpc
+SRC_C += ../../../component/common/network/httpc/httpc_tls.c
+
+#network - httpd
+SRC_C += ../../../component/common/network/httpd/httpd_tls.c
+
 #network - mdns
 SRC_C += ../../../component/common/network/mDNS/mDNSPlatform.c
 
+#network - wsclient
+SRC_C += ../../../component/common/network/websocket/wsclient_tls.c
 
 #os - freertos
 SRC_C += ../../../component/os/freertos/freertos_v8.1.2/Source/portable/MemMang/heap_5.c
@@ -200,8 +226,8 @@ SRC_C += ../../../component/os/freertos/freertos_v8.1.2/Source/timers.c
 #os - osdep
 SRC_C += ../../../component/os/os_dep/device_lock.c
 SRC_C += ../../../component/os/freertos/freertos_service.c
-SRC_C += ../../../component/os/os_dep/mailbox.c
-SRC_C += ../../../component/os/os_dep/osdep_api.c
+SRC_C += ../../../component/soc/realtek/8195a/misc/os/mailbox.c
+SRC_C += ../../../component/soc/realtek/8195a/misc/os/osdep_api.c
 SRC_C += ../../../component/os/os_dep/osdep_service.c
 SRC_C += ../../../component/os/os_dep/tcm_heap.c
 
@@ -250,9 +276,6 @@ SRC_C += ../../../component/soc/realtek/8195a/fwlib/src/hal_ssi.c
 SRC_C += ../../../component/soc/realtek/8195a/fwlib/src/hal_timer.c
 SRC_C += ../../../component/soc/realtek/8195a/fwlib/src/hal_uart.c
 
-#peripheral - osdep
-SRC_C += ../../../component/os/freertos/freertos_pmu.c
-
 #peripheral - rtl8195a
 SRC_C += ../../../component/soc/realtek/8195a/fwlib/rtl8195a/src/rtl8195a_adc.c
 SRC_C += ../../../component/soc/realtek/8195a/fwlib/rtl8195a/src/rtl8195a_gdma.c
@@ -271,6 +294,7 @@ SRC_C += ../../../component/soc/realtek/8195a/fwlib/rtl8195a/src/rtl8195a_uart.c
 
 #SDRAM
 DRAM_C += ../../../component/common/api/platform/stdlib_patch.c
+
 #SDRAM - polarssl
 DRAM_C += ../../../component/common/network/ssl/polarssl-1.3.8/library/aes.c
 DRAM_C += ../../../component/common/network/ssl/polarssl-1.3.8/library/aesni.c
@@ -341,15 +365,78 @@ DRAM_C += ../../../component/common/network/ssl/polarssl-1.3.8/library/x509write
 DRAM_C += ../../../component/common/network/ssl/polarssl-1.3.8/library/x509write_csr.c
 DRAM_C += ../../../component/common/network/ssl/polarssl-1.3.8/library/xtea.c
 
+#SDRAM - mbedtls
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/aes.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/aesni.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/arc4.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/asn1parse.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/asn1write.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/base64.c
+#SRC_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/bignum.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/blowfish.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/camellia.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ccm.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/certs.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/cipher.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/cipher_wrap.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ctr_drbg.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/debug.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/des.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/dhm.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ecp.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ecp_curves.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ecdh.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ecdsa.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/entropy.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/entropy_poll.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/error.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/gcm.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/havege.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/hmac_drbg.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/md.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/md_wrap.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/md2.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/md4.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/md5.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/memory_buffer_alloc.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/net_sockets.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/oid.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/padlock.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pem.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pkcs5.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pkcs11.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pkcs12.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pk.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pk_wrap.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pkparse.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/pkwrite.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/platform.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ripemd160.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/rsa.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/sha1.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/sha256.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/sha512.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ssl_cache.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ssl_ciphersuites.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ssl_cli.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ssl_srv.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/ssl_tls.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/threading.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/timing.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/version.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/version_features.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509_crt.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509_crl.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509_csr.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509_create.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509write_crt.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/x509write_csr.c
+#DRAM_C += ../../../component/common/network/ssl/mbedtls-2.4.0/library/xtea.c
+
 #SDRAM - ssl_ram_map
 DRAM_C += ../../../component/common/network/ssl/ssl_ram_map/rom/rom_ssl_ram_map.c
 DRAM_C += ../../../component/common/network/ssl/ssl_ram_map/ssl_ram_map.c
-
-#SDRAM - wigadget
-DRAM_C += ../../../component/common/application/wigadget/cloud_link.c
-DRAM_C += ../../../component/common/application/wigadget/shtc1.c
-DRAM_C += ../../../component/common/application/wigadget/wigadget.c
-
 
 #utilities
 SRC_C += ../../../component/common/utilities/cJSON.c
@@ -357,19 +444,40 @@ SRC_C += ../../../component/common/utilities/http_client.c
 SRC_C += ../../../component/common/utilities/uart_socket.c
 SRC_C += ../../../component/common/utilities/webserver.c
 SRC_C += ../../../component/common/utilities/xml.c
-#utilities - example
-SRC_C += ../../../component/common/example/example_entry.c
-SRC_C += ../../../component/common/example/uart_atcmd/example_uart_atcmd.c
 
-#utilities - FatFS
-SRC_C += ../../../component/common/file_system/fatfs/fatfs_ext/src/ff_driver.c
-SRC_C += ../../../component/common/file_system/fatfs/r0.10c/src/diskio.c
-SRC_C += ../../../component/common/file_system/fatfs/r0.10c/src/ff.c
-SRC_C += ../../../component/common/file_system/fatfs/r0.10c/src/option/ccsbcs.c
-SRC_C += ../../../component/common/file_system/fatfs/disk_if/src/sdcard.c
+#utilities - example
+SRC_C += ../../../component/common/example/mqtt/example_mqtt.c
+SRC_C += ../../../component/common/example/bcast/example_bcast.c
+SRC_C += ../../../component/common/example/eap/example_eap.c
+SRC_C += ../../../component/common/example/example_entry.c
+SRC_C += ../../../component/common/example/dct/example_dct.c
+SRC_C += ../../../component/common/example/get_beacon_frame/example_get_beacon_frame.c
+SRC_C += ../../../component/common/example/high_load_memory_use/example_high_load_memory_use.c
+SRC_C += ../../../component/common/example/http_client/example_http_client.c
+SRC_C += ../../../component/common/example/http_download/example_http_download.c
+SRC_C += ../../../component/common/example/httpc/example_httpc.c
+SRC_C += ../../../component/common/example/httpd/example_httpd.c
+SRC_C += ../../../component/common/example/mcast/example_mcast.c
+SRC_C += ../../../component/common/example/mdns/example_mdns.c
+SRC_C += ../../../component/common/example/nonblock_connect/example_nonblock_connect.c
+SRC_C += ../../../component/common/example/rarp/example_rarp.c
+SRC_C += ../../../component/common/example/sntp_showtime/example_sntp_showtime.c
+SRC_C += ../../../component/common/example/socket_select/example_socket_select.c
+SRC_C += ../../../component/common/example/socket_tcp_trx/example_socket_tcp_trx_1.c
+SRC_C += ../../../component/common/example/socket_tcp_trx/example_socket_tcp_trx_2.c
+SRC_C += ../../../component/common/example/ssl_download/example_ssl_download.c
+SRC_C += ../../../component/common/example/ssl_server/example_ssl_server.c
+SRC_C += ../../../component/common/example/tcp_keepalive/example_tcp_keepalive.c
+SRC_C += ../../../component/common/example/uart_atcmd/example_uart_atcmd.c
+SRC_C += ../../../component/common/example/uart_firmware_update/example_uart_update.c
+SRC_C += ../../../component/common/example/wlan_fast_connect/example_wlan_fast_connect.c
+SRC_C += ../../../component/common/example/wlan_scenario/example_wlan_scenario.c
+SRC_C += ../../../component/common/example/websocket/example_wsclient.c
+SRC_C += ../../../component/common/example/xml/example_xml.c
 
 #utilities - xmodme update
 SRC_C += ../../../component/common/application/xmodem/uart_fw_update.c
+
 #user 
 SRC_C += ../src/main.c
 
@@ -387,15 +495,16 @@ DEPENDENCY_LIST = $(addprefix $(OBJ_DIR)/,$(patsubst %.c,%.d,$(SRC_C_LIST)))
 # -------------------------------------------------------------------
 
 CFLAGS =
-CFLAGS += -DM3 -DCONFIG_PLATFORM_8195A -DGCC_ARMCM3 -DARDUINO_SDK
-CFLAGS += -mcpu=cortex-m3 -mthumb -g2 -w -O2 -Wno-pointer-sign -fno-common -fmessage-length=0  -ffunction-sections -fdata-sections -fomit-frame-pointer -fno-short-enums -mcpu=cortex-m3 -DF_CPU=166000000L -std=gnu99 -fsigned-char
+CFLAGS += -DM3 -DCONFIG_PLATFORM_8195A -DGCC_ARMCM3
+CFLAGS += -mcpu=cortex-m3 -mthumb -g2 -w -O2 -Wno-pointer-sign -fno-common -fmessage-length=0  -ffunction-sections -fdata-sections -fomit-frame-pointer -fno-short-enums -DF_CPU=166000000L -std=gnu99 -fsigned-char
 
 LFLAGS = 
 LFLAGS += -mcpu=cortex-m3 -mthumb -g --specs=nano.specs -nostartfiles -Wl,-Map=$(BIN_DIR)/application.map -Os -Wl,--gc-sections -Wl,--cref -Wl,--entry=Reset_Handler -Wl,--no-enum-size-warning -Wl,--no-wchar-size-warning
+LFLAGS += -Wl,-wrap,malloc -Wl,-wrap,free -Wl,-wrap,realloc
 
 LIBFLAGS =
-all: LIBFLAGS += -L../../../component/soc/realtek/8195a/misc/bsp/lib/common/GCC/ -l_platform -l_wlan -l_p2p -l_wps -l_rtlstd -l_websocket -l_xmodem -lm -lc -lnosys -lgcc
-mp: LIBFLAGS += -L../../../component/soc/realtek/8195a/misc/bsp/lib/common/GCC/ -l_platform -l_wlan_mp -l_p2p -l_wps -l_rtlstd -l_websocket -l_xmodem -lm -lc -lnosys -lgcc
+all: LIBFLAGS += -L../../../component/soc/realtek/8195a/misc/bsp/lib/common/GCC/ -l_platform -l_wlan -l_http -l_dct -l_wps -l_rtlstd -l_websocket -l_xmodem -lm -lc -lnosys -lgcc -l_mdns
+mp: LIBFLAGS += -L../../../component/soc/realtek/8195a/misc/bsp/lib/common/GCC/ -l_platform -l_wlan_mp -l_p2p -l_wps -l_rtlstd -l_dct -l_websocket -l_xmodem -lm -lc -lnosys -lgcc -l_mdns
 
 RAMALL_BIN =
 OTA_BIN = 
@@ -549,11 +658,4 @@ clean:
 	rm -rf $(TARGET)
 	rm -f $(SRC_O) $(DRAM_O)
 	rm -f $(patsubst %.o,%.d,$(SRC_O)) $(patsubst %.o,%.d,$(DRAM_O))
-	
-.PHONY: clean_all
-clean_all:
-	rm -rf $(ARM_GCC_TOOLCHAIN)
-	rm -rf $(TARGET)
-	rm -f $(SRC_O) $(DRAM_O)
-	rm -f $(patsubst %.o,%.d,$(SRC_O)) $(patsubst %.o,%.d,$(DRAM_O))
-	
+

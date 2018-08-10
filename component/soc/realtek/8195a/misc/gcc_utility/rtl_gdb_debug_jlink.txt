@@ -42,8 +42,6 @@ monitor clrbp
 #Load flash download file
 file ./application/Debug/bin/application.axf
 
-#skip sdram init, it has been init in openocd config
-set {int}0x40000210=0x211157
 #x /1xw 0x40000210
 
 b main

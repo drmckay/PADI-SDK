@@ -11,16 +11,24 @@
 #include "platform_stdlib.h"
 #include "wifi_simple_config_parser.h"
 #include "wifi_simple_config.h"
+#include "wifi_conf.h"
+#include "wifi_util.h"
 
-#if CONFIG_EXAMPLE_UART_ATCMD
+#if CONFIG_EXAMPLE_UART_ATCMD || CONFIG_EXAMPLE_SPI_ATCMD 
 #include "at_cmd/atcmd_wifi.h"
 #endif
 
+#define SC_SOFTAP_EN      1 // on/off softAP mode
 #define STACKSIZE         512
-#define LEAVE_ACK_EARLY   0
+#define LEAVE_ACK_EARLY   1
 
 #if (CONFIG_LWIP_LAYER == 0)
 extern u32 _ntohl(u32 n);
+#endif
+
+#if CONFIG_INIC_EN
+#undef SC_SOFTAP_EN
+#define SC_SOFTAP_EN      0 // disable softAP mode for iNIC applications
 #endif
 
 #if CONFIG_WLAN
@@ -33,7 +41,32 @@ unsigned char g_ssid[32];
 int g_ssid_len;
 
 extern int promisc_get_fixed_channel( void *, u8 *, int* );
+extern struct netif xnetif[NET_IF_NUM];
+
+#if CONFIG_EXAMPLE_WLAN_FAST_CONNECT
+typedef int (*init_done_ptr)(void);
+extern init_done_ptr p_wlan_init_done_callback;
+extern int wlan_init_done_callback();
+#endif
+
 struct rtk_test_sc;
+static enum sc_result promisc_mode_ret = SC_SUCCESS;
+static int is_need_connect_to_AP = 0;
+static u8 mac_addr[6];
+
+#if SC_SOFTAP_EN
+SC_softAP_decode_ctx *softAP_decode_ctx = NULL;
+static u8 simple_config_softAP_onAuth = 0;
+static u8 simple_config_softAP_channel = 6;
+static int softAP_socket = -1;
+static int simple_config_promisc_channel_tbl[] = {1,2,3,4,5,6,7,8,9,10,11,1,2,3,4,5,6,7,8,9,10,11,1};
+static int softAP_decode_success = -1;
+static _sema sc_sta_assoc_sema;
+#else
+static const int simple_config_promisc_channel_tbl[] = {1,2,3,4,5,6,7,8,9,10,11,12,13};
+#endif
+
+static _sema simple_config_finish_sema;
 
 #ifdef PACK_STRUCT_USE_INCLUDES
 #include "arch/bpstruct.h"
@@ -60,8 +93,8 @@ PACK_STRUCT_END
 
 
 #define 	MULCAST_PORT		(8864)
-
 #define 	SCAN_BUFFER_LENGTH	(1024)
+#define     SC_SOFTAP_TIMEOUT   (60000)
 
 #ifndef WLAN0_NAME
   #define WLAN0_NAME		"wlan0"
@@ -73,8 +106,6 @@ char simple_config_terminate = 0;
 int simple_config_result;
 static struct ack_msg  *ack_content;
 struct rtk_test_sc *backup_sc_ctx;
-extern struct netif xnetif[NET_IF_NUM];
-
 // listen scan command and ACK 
 #ifdef SC_SCAN_SUPPORT
 
@@ -298,27 +329,37 @@ leave_ack:
 static int  SC_check_and_show_connection_info(void)
 {
 	rtw_wifi_setting_t setting;	
-	int ret = -1;
-
-#if CONFIG_LWIP_LAYER
-	/* If not rise priority, LwIP DHCP may timeout */
-	vTaskPrioritySet(NULL, tskIDLE_PRIORITY + 3);	
-	/* Start DHCP Client */
-	ret = LwIP_DHCP(0, DHCP_START);
-	vTaskPrioritySet(NULL, tskIDLE_PRIORITY + 1);	
-#endif	
 	
-#if CONFIG_EXAMPLE_UART_ATCMD == 0
+#if CONFIG_LWIP_LAYER	
+    int ret = -1;
+	int retry = 0; 
+
+    vTaskPrioritySet(NULL, tskIDLE_PRIORITY + 3);	
+	while(retry < 2)
+	{
+    	/* If not rise priority, LwIP DHCP may timeout */
+    	/* Start DHCP Client */
+    	ret = LwIP_DHCP(0, DHCP_START);
+	    if (ret == DHCP_ADDRESS_ASSIGNED)
+	        break;
+	    else
+	        retry++;    	
+	}
+    vTaskPrioritySet(NULL, tskIDLE_PRIORITY + 1);
+#endif
+	
+#if CONFIG_EXAMPLE_UART_ATCMD == 0 || CONFIG_EXAMPLE_SPI_ATCMD 
 	wifi_get_setting(WLAN0_NAME, &setting);
 	wifi_show_setting(WLAN0_NAME, &setting);
 #endif
-
+	
 #if CONFIG_LWIP_LAYER
 	if (ret != DHCP_ADDRESS_ASSIGNED)
 		return SC_DHCP_FAIL;
 	else
 #endif
 		return SC_SUCCESS;
+
 }
 
 static void check_and_set_security_in_connection(rtw_security_t security_mode, rtw_network_info_t *wifi) 
@@ -340,14 +381,110 @@ static void check_and_set_security_in_connection(rtw_security_t security_mode, r
 	}
 }
 
+#if SC_SOFTAP_EN
+static int SC_softAP_find_ap_from_scan_buf(char*buf, int buflen, char *target_ssid, void *user_data)
+{
+	rtw_wifi_setting_t *pwifi = (rtw_wifi_setting_t *)user_data;
+	int plen = 0;
+	
+	while(plen < buflen){
+		u8 len, ssid_len, security_mode;
+		char *ssid;
+
+		// len offset = 0
+		len = (int)*(buf + plen);
+		// check end
+		if(len == 0) break;
+		// ssid offset = 14
+		ssid_len = len - 14;
+		ssid = buf + plen + 14 ;
+		if((ssid_len == strlen(target_ssid))
+			&& (!memcmp(ssid, target_ssid, ssid_len)))
+		{
+			strcpy((char*)pwifi->ssid, target_ssid);
+			// channel offset = 13
+			pwifi->channel = *(buf + plen + 13);
+			// security_mode offset = 11
+			security_mode = (u8)*(buf + plen + 11);
+			if(security_mode == IW_ENCODE_ALG_NONE)
+				pwifi->security_type = RTW_SECURITY_OPEN;
+			else if(security_mode == IW_ENCODE_ALG_WEP)
+				pwifi->security_type = RTW_SECURITY_WEP_PSK;
+			else if(security_mode == IW_ENCODE_ALG_CCMP)
+				pwifi->security_type = RTW_SECURITY_WPA2_AES_PSK;
+			break;
+		}
+		plen += len;
+	}
+	return 0;
+}
+
+static int SC_softAP_get_ap_security_mode(IN char * ssid, OUT rtw_security_t *security_mode)
+{
+	rtw_wifi_setting_t wifi;
+	u32 scan_buflen = 1000;
+
+	memset(&wifi, 0, sizeof(wifi));
+
+	if(wifi_scan_networks_with_ssid(SC_softAP_find_ap_from_scan_buf, (void*)&wifi, scan_buflen, ssid, strlen(ssid)) != RTW_SUCCESS){
+		printf("Wifi scan failed!\n");
+		return 0;
+	}
+
+	if(strcmp(wifi.ssid, ssid) == 0){
+		*security_mode = wifi.security_type;
+		return 1;
+	}
+		
+	return 0;
+}
+
+#endif // end of SC_SOFTAP_EN
 int get_connection_info_from_profile(rtw_security_t security_mode, rtw_network_info_t *wifi)
 {
 
 	printf("\r\n======= Connection Information =======\n");
+
+#if !SC_SOFTAP_EN
 	check_and_set_security_in_connection(security_mode, wifi);
+#endif
 
 	wifi->password = backup_sc_ctx->password;
 	wifi->password_len = (int)strlen((char const *)backup_sc_ctx->password);
+
+#if SC_SOFTAP_EN	
+    // reconfigure the security mode, when under softAP mode; do not support WEP now	
+	if(softAP_decode_success == 0)
+	{
+	
+		wifi->ssid.len = strlen(backup_sc_ctx->ssid);
+		rtw_memcpy(wifi->ssid.val, backup_sc_ctx->ssid, wifi->ssid.len);
+
+        if(0 == SC_softAP_get_ap_security_mode(wifi->ssid.val, &wifi->security_type))
+        {
+    	    if(wifi->password_len)
+    	        wifi->security_type = RTW_SECURITY_WPA2_AES_PSK;
+    	    else
+    	        wifi->security_type = RTW_SECURITY_OPEN;        
+        }
+        
+    	if (wifi->security_type == RTW_SECURITY_WPA2_AES_PSK) {				
+    		printf("\r\nwifi->security_type = RTW_SECURITY_WPA2_AES_PSK\n");
+    	} else if (wifi->security_type == RTW_SECURITY_WEP_PSK) {
+    		printf("\r\nwifi->security_type = RTW_SECURITY_WEP_PSK\n");
+    		wifi->key_id = 0;
+    	} else if (wifi->security_type == RTW_SECURITY_WPA_AES_PSK) {
+    		printf("\r\nwifi->security_type = RTW_SECURITY_WPA_AES_PSK\n");
+    	} else {
+    		printf("\r\nwifi->security_type = RTW_SECURITY_OPEN\n");
+    	}
+    	
+        goto ssid_set_done;
+        	        
+	}
+	else
+	    check_and_set_security_in_connection(security_mode, wifi);
+#endif
 
 	/* 1.both scanned g_ssid and ssid from profile are null, return fail */
 	if ((0 == g_ssid_len) && (0 == strlen(backup_sc_ctx->ssid))) {
@@ -435,15 +572,12 @@ struct scan_with_ssid_result {
 	//char ssid[65];
 };
 
-
 struct sc_ap_info {
 
 	char *ssid;
 	int ssid_len;
 
 };
-
-
 
 rtw_security_t	SC_translate_iw_security_mode(u8 security_type) {
 
@@ -623,9 +757,6 @@ int  SC_connect_to_candidate_AP (rtw_network_info_t *wifi){
 	return ret;
 }
 
-
-
-
 rtw_security_t SC_translate_security(u8 security_type)
 {
 
@@ -668,10 +799,17 @@ enum sc_result SC_connect_to_AP(void)
 	if(!(fixed_channel_num == 0)){
 		scan_channel = fixed_channel_num;
 	}
+	
 	pscan_config = PSCAN_ENABLE | PSCAN_SIMPLE_CONFIG;
 
-	security_mode = SC_translate_security(g_security_mode);
-	g_security_mode = 0xff;//clear it
+#if SC_SOFTAP_EN
+	if(softAP_decode_success != 0)
+#endif
+	{
+    	security_mode = SC_translate_security(g_security_mode);
+    	g_security_mode = 0xff;//clear it	
+	}
+
 
 	if (-1 == get_connection_info_from_profile(security_mode, &wifi)) {
 		ret = SC_CONTROLLER_INFO_PARSE_FAIL;
@@ -686,15 +824,30 @@ enum sc_result SC_connect_to_AP(void)
 #if 1
 	/* optimization: get g_bssid to connect with only pscan */
 	while (1) {
-		if(wifi_set_pscan_chan(&scan_channel, &pscan_config, 1) < 0){
-			printf("\n\rERROR: wifi set partial scan channel fail");
-			ret = SC_TARGET_CHANNEL_SCAN_FAIL;
-			goto wifi_connect_fail;
-		}
-        rtw_join_status = 0;//clear simple config status
-		ret = wifi_connect_bssid(g_bssid,  (char*)wifi.ssid.val,  wifi.security_type,  (char*)wifi.password,
-									  ETH_ALEN,  wifi.ssid.len,  wifi.password_len,  wifi.key_id,  NULL);
 
+#if SC_SOFTAP_EN
+	    if(softAP_decode_success != 0)
+#endif
+	    {
+    		if(wifi_set_pscan_chan(&scan_channel, &pscan_config, 1) < 0){
+    			printf("\n\rERROR: wifi set partial scan channel fail");
+    			ret = SC_TARGET_CHANNEL_SCAN_FAIL;
+    			goto wifi_connect_fail;
+    		}
+    		rtw_join_status = 0;
+    		ret = wifi_connect_bssid(g_bssid,  (char*)wifi.ssid.val,  wifi.security_type,  (char*)wifi.password,
+    									  ETH_ALEN,  wifi.ssid.len,  wifi.password_len,  wifi.key_id,  NULL);
+	    }
+
+#if SC_SOFTAP_EN
+
+	    // when configured by softAP mode    
+	    else
+	    {
+            rtw_join_status = 0;	                
+	        ret = wifi_connect(wifi.ssid.val, wifi.security_type, wifi.password, wifi.ssid.len, wifi.password_len, 0, NULL);    
+	    }    
+#endif
 		if (ret == RTW_SUCCESS)
 			goto wifi_connect_success;
 
@@ -738,19 +891,33 @@ wifi_connect_end:
 
 
 }
-/* Make callback one by one to wlan rx when promiscuous mode */
 
 void simple_config_callback(unsigned char *buf, unsigned int len, void* userdata)
 {
-	unsigned char * da = buf;
-	unsigned char * sa = buf + ETH_ALEN;
-	taskENTER_CRITICAL();
-	if (is_promisc_callback_unlock == 1) {
-	 	simple_config_result = rtk_start_parse_packet(da, sa, len, userdata, (void *)backup_sc_ctx);
-		//printf("\r\nresult in callback function = %d\n",simple_config_result);
-	} 
-	taskEXIT_CRITICAL();
+    int ret = 0;
 
+	unsigned char *da = NULL;
+	unsigned char *sa = NULL;
+
+#if SC_SOFTAP_EN
+    ret = rtl_pre_parse(mac_addr, buf, userdata, &da, &sa, &len);    
+    if(ret == -1)
+        return;
+    else if(ret == 1)
+        simple_config_softAP_onAuth = 1;
+    else
+#else
+	da = buf;
+	sa = buf + ETH_ALEN;        
+#endif
+
+    {
+    	taskENTER_CRITICAL();
+    	if (is_promisc_callback_unlock == 1) {    
+    	 	simple_config_result = rtk_start_parse_packet(da, sa, len, userdata, (void *)backup_sc_ctx);
+    	} 
+    	taskEXIT_CRITICAL();
+    }       
 }
 
 static unsigned int simple_config_cmd_start_time;
@@ -765,12 +932,12 @@ void init_simple_config_lib_config(struct simple_config_lib_config* config)
 {
 	config->free = rtw_mfree;
 	config->malloc = rtw_malloc;
-	config->memcmp = memcmp;
-	config->memcpy = memcpy;
-	config->memset = memset;
-	config->printf = printf;
-	config->strcpy = strcpy;
-	config->strlen = strlen;
+	config->memcmp = _memcmp;
+	config->memcpy = _memcpy;
+	config->memset = _memset;
+	config->printf = (simple_config_printf_fn)printf;
+	config->strcpy = _strcpy;
+	config->strlen = _strlen;
 	config->zmalloc = rtw_zmalloc;
 #if CONFIG_LWIP_LAYER
 	config->_ntohl = lwip_ntohl;
@@ -784,6 +951,13 @@ void init_simple_config_lib_config(struct simple_config_lib_config* config)
 int init_test_data(char *custom_pin_code)
 {
 #if (CONFIG_INCLUDE_SIMPLE_CONFIG)
+
+	if(rtw_join_status & JOIN_SIMPLE_CONFIG){
+		printf("\r\npromisc mode is running!");
+		return -1;
+	}else
+		rtw_join_status |= JOIN_SIMPLE_CONFIG;
+	
 	is_promisc_callback_unlock = 1;
 	is_fixed_channel = 0;
 	fixed_channel_num = 0;
@@ -791,7 +965,28 @@ int init_test_data(char *custom_pin_code)
 	rtw_memset(g_ssid, 0, 32);
 	g_ssid_len = 0;
 	simple_config_cmd_start_time = xTaskGetTickCount();
+	promisc_mode_ret = SC_SUCCESS;
+	is_need_connect_to_AP = 0;
+    memset(mac_addr, 0, sizeof(mac_addr));
+    
+#if SC_SOFTAP_EN	
+	simple_config_softAP_onAuth = 0;
+	softAP_socket = -1;
+	softAP_decode_success = -1;
+	rtw_init_sema(&sc_sta_assoc_sema, 0);
 	
+    softAP_decode_ctx = pvPortMalloc(sizeof(SC_softAP_decode_ctx));
+    if(!softAP_decode_ctx)
+    {
+        printf("malloc softAP_decode_cxt fail");
+        return -1;
+    }
+    else
+        memset(softAP_decode_ctx, 0, sizeof(SC_softAP_decode_ctx));	
+#endif
+	
+	rtw_init_sema(&simple_config_finish_sema, 0);
+
 	if (ack_content != NULL) {
 		vPortFree(ack_content);
 		ack_content = NULL;
@@ -807,8 +1002,9 @@ int init_test_data(char *custom_pin_code)
 		pin_enable = 1;
 	else
 		pin_enable = 0;
-#endif	
-
+#endif
+        
+    
 	backup_sc_ctx = pvPortMalloc(sizeof(struct rtk_test_sc));
 	if (!backup_sc_ctx) {
 		printf("\n\r[Mem]malloc SC context fail\n");
@@ -822,13 +1018,14 @@ int init_test_data(char *custom_pin_code)
 		} else {
 			return 0;
 		}
-	}	
-
+	}
+    
 #else
 	printf("\n\rPlatform no include simple config now\n");
 #endif	
 	return -1;
 }
+
 
 void deinit_test_data(){
 #if (CONFIG_INCLUDE_SIMPLE_CONFIG)
@@ -841,7 +1038,18 @@ void deinit_test_data(){
 		vPortFree(ack_content);
 		ack_content = NULL;
 	}
+
+#if SC_SOFTAP_EN	
+	if(softAP_decode_ctx != NULL) {
+		vPortFree(softAP_decode_ctx);
+		softAP_decode_ctx = NULL;	
+	}
+	rtw_free_sema(&sc_sta_assoc_sema);
+#endif
+	
 	rtw_join_status = 0;//clear simple config status
+    rtw_free_sema(&simple_config_finish_sema);
+    
 #endif
 }
 
@@ -850,29 +1058,346 @@ void stop_simple_config()
 	simple_config_terminate = 1;
 }
 
-enum sc_result simple_config_test(rtw_network_info_t *wifi)
+#if SC_SOFTAP_EN
+// use new ssid generation function
+static void simpleConfig_get_softAP_profile(unsigned char *SimpleConfig_SSID, unsigned char *SimpleConfig_password)
 {
-	int channel = 1;
-	enum sc_result ret = SC_SUCCESS;
+    char MAC_sum_complement = 0;
+    
+    memcpy(mac_addr, LwIP_GetMAC(&xnetif[0]), 6);
+    if(mac_addr == NULL)
+    {
+        printf("Get MAC error\n");
+        return;
+    }
+    
+    // copy MAC to softAP decode ctx
+    memcpy(softAP_decode_ctx -> mac, mac_addr, 6);
+    
+    MAC_sum_complement = -(mac_addr[3] + mac_addr[4] + mac_addr[5]);
+    sprintf(SimpleConfig_SSID, "@RSC-%02X%02X%02X00%02X",
+            mac_addr[3], mac_addr[4], mac_addr[5], (MAC_sum_complement & 0xff));
+
+    memcpy(SimpleConfig_password, "12345678", 8);
+            
+    //printf("softAP ssid: %s, password: %s\n", SimpleConfig_SSID, SimpleConfig_password);
+    return;
+    
+}
+static void sc_sta_asso_cb( char* buf, int buf_len, int flags, void* userdata)
+{
+    rtw_up_sema(&sc_sta_assoc_sema);
+    return;
+}
+
+static void simple_config_kick_STA()
+{
+	int client_idx = 0;
+	struct {
+		int    count;
+		rtw_mac_t mac_list[AP_STA_NUM];
+	} client_info;
+    
+    memset(&client_info, 0, sizeof(client_info));
+	client_info.count = AP_STA_NUM;
+	wifi_get_associated_client_list(&client_info, sizeof(client_info));
+	
+	while(client_idx < client_info.count)
+	{
+	    unsigned char *pmac = client_info.mac_list[client_idx].octet;
+	    printf("kick out sta: %02x:%02x:%02x:%02x:%02x:%02x\n",
+	            pmac[0],pmac[1],pmac[2],pmac[3],pmac[4],pmac[5]);
+        wext_del_station("wlan0", pmac);
+        ++client_idx;
+	}
+	return;
+	
+}
+// triggered by sta association event
+static int simple_config_softap_config()
+{
+	int packetLen;
+	int ret = -1;
+	struct sockaddr from;
+	struct sockaddr_in *from_sin = (struct sockaddr_in*)&from;
+	socklen_t fromLen = sizeof(from);	
+	unsigned char recv_buf[128];
+	int client_fd = -1;
+	int tcp_err = 0;
+    SC_softAP_status decode_ret = SOFTAP_ERROR;
+
+	// block 10s to receive udp packet from smart phone        
+	client_fd = accept(softAP_socket, (struct sockaddr *) &from, &fromLen);
+
+	if(client_fd < 0)
+	{
+	    printf("no client connection, timeout\n");
+        //kick the sta, wf, 0817
+        simple_config_kick_STA();
+        return -1;	    
+	}
+    
+    //printf("accept a new client: %d\n", client_fd);
+    while(1)
+    {
+        int sock_err = 0;
+        size_t err_len = sizeof(sock_err);
+        
+        vTaskDelay(10);
+        ret = recv(client_fd, recv_buf, sizeof(recv_buf), MSG_DONTWAIT);
+        getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &sock_err, &err_len);
+        
+        // ret == -1 and socket error == EAGAIN when no data received for nonblocking
+        if (ret == -1 && sock_err == EAGAIN)
+            continue;
+        else if (ret <= 0)
+        {
+            tcp_err = -1;
+            break;
+        }
+        else
+        {
+            // decode simpleConfig pkt
+            decode_ret = softAP_simpleConfig_parse(recv_buf, ret, backup_sc_ctx, softAP_decode_ctx);
+            switch (decode_ret) {
+                case SOFTAP_ERROR:
+                    continue;
+                case SOFTAP_RECV_A: //send nonceB
+                    if(send(client_fd, softAP_decode_ctx -> nonceB, sizeof(softAP_decode_ctx -> nonceB), 0) < 0)
+                    {
+                        tcp_err = -2;
+                        break;
+                    }
+                    else
+                        continue;
+                case SOFTAP_HANDSHAKE_DONE:// send response to finish handshake
+                    if(send(client_fd, "OK", 2, 0) < 0)
+                    {
+                        tcp_err = -2;
+                        break;
+                    }
+                    continue;
+                case SOFTAP_DECODE_SUCCESS:
+                    {
+                        char softAP_ack_content[17];
+                        //printf("softAP mode simpleConfig success, send response\n");
+                    	// ack content: MAC address in string mode
+                    	sprintf(softAP_ack_content, "%02x:%02x:%02x:%02x:%02x:%02x",
+                    	        mac_addr[0], mac_addr[1], mac_addr[2], 
+                    	        mac_addr[3], mac_addr[4], mac_addr[5]);
+
+                        if(send(client_fd, softAP_ack_content, sizeof(softAP_ack_content), 0) <= 0)
+                            tcp_err = -3;
+                        else
+                            vTaskDelay(500); // make sure the response pkt has enough time to be transmitted    
+                        break;
+                    }
+            }
+            
+            break; // break the while loop
+        }
+    }
+	// close the client socket
+	close(client_fd);
+	
+    //error handler here, wf, 0816
+	if(tcp_err < 0)
+	{
+	    if(tcp_err == -1)
+	        printf("tcp recv error\n");  
+	    else
+	        printf("tcp send response error\n");
+	        
+		tcp_err = 0;
+		return -1;
+	}
+    else
+        return 0;
+        
+}
+#if CONFIG_EXAMPLE_WLAN_FAST_CONNECT
+static void stop_fast_connect()
+{
+    p_wlan_init_done_callback = NULL;
+    return;
+}
+
+static void resume_fast_connect()
+{
+    p_wlan_init_done_callback = wlan_init_done_callback;
+    return;
+}
+#endif
+
+// use the softAP channel to reset the promisc channel table
+static void init_promisc_scan_channel(unsigned char softAP_ch)
+{
+    int i = sizeof(simple_config_promisc_channel_tbl)/sizeof(simple_config_promisc_channel_tbl[0]);
+    simple_config_promisc_channel_tbl[i - 1] = softAP_ch;
+    return;
+}
+
+static int SimpleConfig_softAP_start(const char* ap_name, const char *ap_password)
+{
+	int timeout = 20;
+#if CONFIG_LWIP_LAYER 
+	struct ip_addr ipaddr;
+	struct ip_addr netmask;
+	struct ip_addr gw;
+	struct netif * pnetif = &xnetif[0];
+#endif
+	int ret = 0;
+
+#if CONFIG_LWIP_LAYER
+	dhcps_deinit();
+	IP4_ADDR(&ipaddr, GW_ADDR0, GW_ADDR1, GW_ADDR2, GW_ADDR3);
+	IP4_ADDR(&netmask, NETMASK_ADDR0, NETMASK_ADDR1 , NETMASK_ADDR2, NETMASK_ADDR3);
+	IP4_ADDR(&gw, GW_ADDR0, GW_ADDR1, GW_ADDR2, GW_ADDR3);
+
+	netif_set_addr(pnetif, &ipaddr, &netmask,&gw);
+#endif
+
+	wifi_off();
+	vTaskDelay(20);
+	if (wifi_on(RTW_MODE_AP) < 0){
+		printf("Wifi on failed!");
+		return -1;
+	}
+	wifi_disable_powersave();//add to close powersave
+#ifdef CONFIG_WPS_AP
+	wpas_wps_dev_config(pnetif->hwaddr, 1);
+#endif
+
+	if(ap_password) {
+		if(wifi_start_ap((char*)ap_name,
+			RTW_SECURITY_WPA2_AES_PSK,
+			(char*)ap_password,
+			strlen((const char *)ap_name),
+			strlen((const char *)ap_password),
+			simple_config_softAP_channel
+			) != RTW_SUCCESS) 
+		{
+			printf("wifi start ap mode failed!\n\r");
+			return -1;
+		}
+	} else {
+		if(wifi_start_ap((char*)ap_name,
+			RTW_SECURITY_OPEN,
+			NULL,
+			strlen((const char *)ap_name),
+			0,
+			simple_config_softAP_channel
+			) != RTW_SUCCESS) 
+		{
+			printf("wifi start ap mode failed!\n\r");
+			return -1;
+		}
+	}
+
+	while(1) {
+		char essid[33];
+		if(wext_get_ssid(WLAN0_NAME, (unsigned char *) essid) > 0) {
+			if(strcmp((const char *) essid, (const char *)ap_name) == 0) {
+				//printf("%s started\n", ap_name);
+				ret = 0;
+				break;
+			}
+		}
+
+		if(timeout == 0) {
+			printf("Start AP timeout!\n\r");
+			ret = -1;
+			break;
+		}
+
+		vTaskDelay(1 * configTICK_RATE_HZ);
+		timeout --;
+	}
+#if CONFIG_LWIP_LAYER
+	//LwIP_UseStaticIP(pnetif);
+	dhcps_init(pnetif);
+#endif
+	return ret;
+}
+
+#endif // end of SC_SOFTAP_EN
+
+static int simple_config_get_channel_interval(int ch_idx)
+{
+    int interval = 105;
+    int ch_len = sizeof(simple_config_promisc_channel_tbl)/sizeof(simple_config_promisc_channel_tbl[0]);
+    
+    if(ch_idx == ch_len - 1) // this is the softAP channel idx
+        interval = 5000;
+        
+    return interval;
+}
+static void simple_config_channel_control(void *para)
+{   
+	int ch_idx = 0;
 	unsigned int start_time;
-	int is_need_connect_to_AP = 0;
 	int fix_channel = 0;
 	int delta_time = 0;
-	wifi_set_promisc(RTW_PROMISC_ENABLE, simple_config_callback, 1);
+#if SC_SOFTAP_EN
+	unsigned char softAP_SSID[33];
+	unsigned char softAP_password[65];
+#endif
+	rtw_network_info_t *wifi = (rtw_network_info_t *)para;
 	start_time = xTaskGetTickCount();
-	printf("\n\r");
-	wifi_set_channel(channel);
+	
 	while (simple_config_terminate != 1) {
 	  	vTaskDelay(50);	//delay 0.5s to release CPU usage
-	  	simple_config_cmd_current_time = xTaskGetTickCount();
-#if CONFIG_GAGENT
-	  	if (simple_config_cmd_current_time - simple_config_cmd_start_time < ((50 + delta_time)*configTICK_RATE_HZ)) {
-#else
-	  	if (simple_config_cmd_current_time - simple_config_cmd_start_time < ((120 + delta_time)*configTICK_RATE_HZ)) {
+
+#if SC_SOFTAP_EN	  	
+	  	// softAP mode already get the AP profile
+	  	if(is_need_connect_to_AP == 1)
+	  	    break;
+
+        if(simple_config_softAP_onAuth == 1)
+        {
+			wifi_set_promisc(RTW_PROMISC_DISABLE, NULL, 0);
+			wifi_set_channel(simple_config_softAP_channel);
+		    wifi_reg_event_handler(WIFI_EVENT_STA_ASSOC, sc_sta_asso_cb, NULL);			
+
+			if(rtw_down_timeout_sema(&sc_sta_assoc_sema, SC_SOFTAP_TIMEOUT) == RTW_FALSE) {
+			    //printf("no sta associated after 10s, start promisc\n");		    
+				simple_config_softAP_onAuth = 0;
+				wifi_set_promisc(RTW_PROMISC_ENABLE_2, simple_config_callback, 1); 			
+            }
+			else
+			{
+			    //printf("new sta associated, wait tcp connection\n");
+			    softAP_decode_success = simple_config_softap_config();
+			    if(softAP_decode_success == 0)
+			    {
+    			    is_need_connect_to_AP = 1;
+    			    break;
+			    }
+			    else
+			    {
+    				simple_config_softAP_onAuth = 0;
+    				wifi_unreg_event_handler(WIFI_EVENT_STA_ASSOC, sc_sta_asso_cb);
+    				wifi_set_promisc(RTW_PROMISC_ENABLE_2, simple_config_callback, 1);
+			    }
+
+			}
+        }
 #endif
+	  	    
+	  	simple_config_cmd_current_time = xTaskGetTickCount();
+	  	
+#if CONFIG_GAGENT
+	  	if (simple_config_cmd_current_time - simple_config_cmd_start_time < ((50 + delta_time)*configTICK_RATE_HZ)) 
+#else
+	  	if (simple_config_cmd_current_time - simple_config_cmd_start_time < ((120 + delta_time)*configTICK_RATE_HZ)) 
+#endif	  	
+	  	{
 			unsigned int current_time = xTaskGetTickCount();
-			if (((current_time - start_time)*1000 /configTICK_RATE_HZ < 100)
+			int interval = simple_config_get_channel_interval(ch_idx);
+			
+			if (((current_time - start_time)*1000 /configTICK_RATE_HZ < interval)
 								|| (is_fixed_channel == 1)) {
+                
 				if(is_fixed_channel == 0 && get_channel_flag == 1){
 				    fix_channel = promisc_get_fixed_channel(g_bssid,g_ssid,&g_ssid_len);
 				    if(fix_channel != 0)
@@ -880,7 +1405,17 @@ enum sc_result simple_config_test(rtw_network_info_t *wifi)
     					printf("\r\nin simple_config_test fix channel = %d ssid: %s\n",fix_channel, g_ssid);
     					is_fixed_channel = 1;
     					fixed_channel_num = fix_channel;
-    					wifi_set_channel(fix_channel);				    
+    					wifi_set_channel(fix_channel);
+#if SC_SOFTAP_EN
+					if(simple_config_softAP_channel != fixed_channel_num){
+						simple_config_softAP_channel = fixed_channel_num;
+						memset(softAP_SSID, 0, sizeof(softAP_SSID));
+						memset(softAP_password, 0, sizeof(softAP_password));
+						simpleConfig_get_softAP_profile(softAP_SSID, softAP_password);
+						SimpleConfig_softAP_start(softAP_SSID, softAP_password);
+						wifi_set_promisc(RTW_PROMISC_ENABLE_2, simple_config_callback, 1); 
+					}
+#endif
 				    }
 				    else
 				        printf("get channel fail\n");
@@ -897,66 +1432,160 @@ enum sc_result simple_config_test(rtw_network_info_t *wifi)
 					wifi_set_channel(1);	
 					is_need_connect_to_AP = 0;
 					is_fixed_channel = 0;
-	               		fixed_channel_num = 0;
+	               	fixed_channel_num = 0;
 					memset(g_ssid, 0, 32);
 					g_ssid_len = 0;
 					simple_config_result = 0;
 					g_security_mode = 0xff;
 					rtk_restart_simple_config();					
-				} 
-				if (simple_config_result == -2) {
-					printf("\n\rThe APP or client must have pin!\n");
-					break;
-				}
+				}				
 			} else {
-					channel++;
-					if ((1 <= channel) && (channel <= 13)) {
-						if (wifi_set_channel(channel) == 0) {	
-							start_time = xTaskGetTickCount();
-							printf("\n\rSwitch to channel(%d)\n", channel);
-						}	
-					} else {
-						channel = 1;
-						if (wifi_set_channel(channel) == 0) {	
-							start_time = xTaskGetTickCount();
-							printf("\n\rSwitch to channel(%d)\n", channel);
-						}	
-					}	
-					
+					ch_idx++;
+					if(ch_idx >= sizeof(simple_config_promisc_channel_tbl)/sizeof(simple_config_promisc_channel_tbl[0]))
+					    ch_idx = 0;                       
+                        					    
+					if (wifi_set_channel(simple_config_promisc_channel_tbl[ch_idx]) == 0) {	
+						start_time = xTaskGetTickCount();
+						printf("\n\rSwitch to channel(%d)\n", simple_config_promisc_channel_tbl[ch_idx]);
+					}					
+										
 			}
+		
 		} else {
-			ret = SC_NO_CONTROLLER_FOUND;
+			promisc_mode_ret = SC_NO_CONTROLLER_FOUND;
 			break;
 		} 
-	}
-		wifi_set_promisc(RTW_PROMISC_DISABLE, NULL, 0);
+	} // end of while
+
+	if(is_promisc_enabled())
+	    wifi_set_promisc(RTW_PROMISC_DISABLE, NULL, 0);
+	    
+#if SC_SOFTAP_EN
+    simple_config_kick_STA();		    
+    close(softAP_socket);
+	wifi_off();
+	
+#if CONFIG_EXAMPLE_WLAN_FAST_CONNECT
+    stop_fast_connect();
+#endif
+
+	wifi_on(RTW_MODE_STA);
+	
+#if CONFIG_EXAMPLE_WLAN_FAST_CONNECT
+    resume_fast_connect();
+#endif
+
+#endif // end of SC_SOFTAP_EN
+
 	if (is_need_connect_to_AP == 1) {
 		if(NULL == wifi){
 			int tmp_res = SC_connect_to_AP();
 			if (SC_SUCCESS == tmp_res) {
-				if(-1 == SC_send_simple_config_ack(10))
-					ret = SC_UDP_SOCKET_CREATE_FAIL;
+				if(-1 == SC_send_simple_config_ack(30))
+					promisc_mode_ret = SC_UDP_SOCKET_CREATE_FAIL;
 				#ifdef SC_SCAN_SUPPORT
 				  // check whether the thread of listen scan command is already created
 				  if(scan_start == 0)
 				  {
-				  	scan_start = 1;
-				  	SC_listen_ACK_scan();
+                    scan_start = 1;
+                    SC_listen_ACK_scan();
 				  }
 				#endif	
 			} else {
-				ret = tmp_res;
+				promisc_mode_ret = tmp_res;
 			}
 		}else{
 			if (-1 == get_connection_info_from_profile(wifi->security_type,wifi)) {
-				ret = SC_CONTROLLER_INFO_PARSE_FAIL;
+				promisc_mode_ret = SC_CONTROLLER_INFO_PARSE_FAIL;
 			}else
-				ret = SC_SUCCESS;
+				promisc_mode_ret = SC_SUCCESS;
 		}
 	}else{
-		ret = SC_NO_CONTROLLER_FOUND;
+		promisc_mode_ret = SC_NO_CONTROLLER_FOUND;
 	}
-	return ret;
+	
+    rtw_up_sema(&simple_config_finish_sema);
+    vTaskDelete(NULL);
+    return;
+}
+
+enum sc_result simple_config_test(rtw_network_info_t *wifi)
+{
+
+#if SC_SOFTAP_EN
+    unsigned char softAP_SSID[33];
+    unsigned char softAP_password[65];
+    int ret; 
+	struct sockaddr_in softAP_addr;
+	//unsigned char channel_set[11];
+	unsigned char channel_set[3];
+	int auto_chl = 0;
+	int timeout = 60000;
+	int tcp_reuse_timeout = 1;
+	
+	memset(softAP_SSID, 0, sizeof(softAP_SSID));
+	memset(softAP_password, 0, sizeof(softAP_password));
+	simpleConfig_get_softAP_profile(softAP_SSID, softAP_password);
+
+    channel_set[0] = 1;
+    channel_set[1] = 6;
+    channel_set[2] = 11;
+
+	auto_chl = wext_get_auto_chl("wlan0", channel_set, sizeof(channel_set)/sizeof(channel_set[0]));
+
+	if(auto_chl <= 0)
+	{
+        printf("Get softAP channel error\n, use static channel\n");	
+        simple_config_softAP_channel = 6;    
+	}else
+        simple_config_softAP_channel = auto_chl;   
+    
+    //printf("softAP channel is set to %d\n", simple_config_softAP_channel);
+   
+	init_promisc_scan_channel(simple_config_softAP_channel);
+	
+	SimpleConfig_softAP_start(softAP_SSID, softAP_password);
+    
+    wifi_set_promisc(RTW_PROMISC_ENABLE_2, simple_config_callback, 1);
+	softAP_socket = socket(PF_INET, SOCK_STREAM, 0);
+	if (softAP_socket == -1) {
+	    printf("softAP_socket create error\n");
+		return SC_UDP_SOCKET_CREATE_FAIL;
+	}
+
+	setsockopt(softAP_socket, SOL_SOCKET, SO_REUSEADDR, (const char *)&tcp_reuse_timeout, sizeof(tcp_reuse_timeout));
+
+	memset(&softAP_addr, 0, sizeof(softAP_addr));
+	softAP_addr.sin_family = AF_INET;
+	softAP_addr.sin_port = htons(18884);
+	softAP_addr.sin_addr.s_addr = INADDR_ANY;
+		
+	if(bind(softAP_socket, (struct sockaddr *) &softAP_addr, sizeof(softAP_addr)) != 0)
+	{
+	    printf("softAP bind error\n");
+	    close(softAP_socket);
+	    return SC_UDP_SOCKET_CREATE_FAIL;
+	}
+  
+    if(lwip_setsockopt(softAP_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(int)) < 0)
+        printf("set socket timeout error\n");
+    
+	if(listen(softAP_socket, 2) != 0) {
+		printf("ERROR: listen\n");
+	    close(softAP_socket);
+	    return SC_UDP_SOCKET_CREATE_FAIL;
+	}
+#else
+    wifi_set_promisc(RTW_PROMISC_ENABLE, simple_config_callback, 1);	
+#endif
+	
+	if(xTaskCreate(simple_config_channel_control, ((const char*)"simple_config_channel_control"), 1024, wifi, tskIDLE_PRIORITY + 1, NULL) != pdPASS)
+		printf("\n\r%s xTaskCreate(simple_config_channel_control) failed", __FUNCTION__); 
+
+	if (rtw_down_sema(&simple_config_finish_sema) == _FAIL)
+		DBG_8195A("%s, Take Semaphore Fail\n", __FUNCTION__);
+  
+    return promisc_mode_ret;
 }
 
 //Filter packet da[] = {0x01, 0x00, 0x5e}
@@ -965,37 +1594,25 @@ enum sc_result simple_config_test(rtw_network_info_t *wifi)
 void filter_add_enable(){
 	u8 mask[MASK_SIZE]={0xFF,0xFF,0xFF};
 	u8 pattern[MASK_SIZE]={0x01,0x00,0x5e};
-	u8 pattern_bcast[MASK_SIZE]={0xff,0xff,0xff};
 	
 	rtw_packet_filter_pattern_t packet_filter;
-	rtw_packet_filter_pattern_t packet_filter_bcast;
-	rtw_packet_filter_rule_e rule;
+	rtw_packet_filter_rule_t rule;
 
 	packet_filter.offset = 0;
 	packet_filter.mask_size = 3;
 	packet_filter.mask = mask;
 	packet_filter.pattern = pattern;
 	
-	packet_filter_bcast.offset = 0;
-	packet_filter_bcast.mask_size = 3;
-	packet_filter_bcast.mask = mask;
-	packet_filter_bcast.pattern = pattern_bcast;
-	
 	rule = RTW_POSITIVE_MATCHING;
 
 	wifi_init_packet_filter();
-	wifi_add_packet_filter(1, &packet_filter,rule);
-	wifi_add_packet_filter(2, &packet_filter_bcast,rule);
-		
+	wifi_add_packet_filter(1, &packet_filter,rule);		
 	wifi_enable_packet_filter(1);
-	wifi_enable_packet_filter(2);
 }
 
 void remove_filter(){
 	wifi_disable_packet_filter(1);
-	wifi_disable_packet_filter(2);
 	wifi_remove_packet_filter(1);
-	wifi_remove_packet_filter(2);
 }
 
 void print_simple_config_result(enum sc_result sc_code)
@@ -1045,26 +1662,40 @@ void cmd_simple_config(int argc, char **argv){
 		printf("\n\rInput Error!");
 	}
 
-	if(argc == 2)
-		custom_pin_code = (argv[1]);
-	
-	simple_config_terminate = 0;
-	rtw_join_status |= JOIN_SIMPLE_CONFIG;
+	if(argc == 2){
+        custom_pin_code = (argv[1]);	
+	    if(strlen(custom_pin_code) != 8){
+            printf("Pin length error, please input 8 byte pin code");
+            return;
+        }
+	}
 
-	wifi_enter_promisc_mode();
+// check whether the pin code is valid	
+	simple_config_terminate = 0;
+
+#if !SC_SOFTAP_EN
+    wifi_enter_promisc_mode();
+#endif
+
 	if(init_test_data(custom_pin_code) == 0){
-		filter_add_enable();
+	
+#if !SC_SOFTAP_EN	
+	    filter_add_enable(); 
+#endif	    
 		ret = simple_config_test(NULL);
 		deinit_test_data();
-		print_simple_config_result(ret);
+		
+#if !SC_SOFTAP_EN		
 		remove_filter();
+#endif		
+		print_simple_config_result(ret);
 	}
 #if CONFIG_INIC_CMD_RSP
 	if(ret != SC_SUCCESS)
 		inic_c2h_wifi_info("ATWQ", RTW_ERROR);
 #endif
 
-#if CONFIG_EXAMPLE_UART_ATCMD
+#if CONFIG_EXAMPLE_UART_ATCMD || CONFIG_EXAMPLE_SPI_ATCMD 
 	if(ret == SC_SUCCESS){
 		at_printf("\n\r[ATWQ] OK");
 	}else{

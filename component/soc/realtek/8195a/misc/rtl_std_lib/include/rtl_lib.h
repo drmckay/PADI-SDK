@@ -10,7 +10,7 @@
 
 #include <basic_types.h>
 #include <diag.h>
-
+#include <va_list.h>
 
 extern int __rtl_errno;
 
@@ -23,10 +23,10 @@ void init_rom_libgloss_ram_map(void);
 // 
 
 extern int rtl_printf(IN const char* fmt, ...);
-extern int rtl_vprintf(const char *fmt, void *param);
+extern int rtl_vprintf(const char *fmt, va_list ap);
 extern int rtl_sprintf(char* str, const char* fmt, ...);
 extern int rtl_snprintf(char* str, size_t size, const char* fmt, ...);
-extern int rtl_vsnprintf(char *str, size_t size, const char *fmt, void *param);
+extern int rtl_vsnprintf(char *str, size_t size, const char *fmt, va_list ap);
 
 //
 // RTL library functions for string

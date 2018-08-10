@@ -7,14 +7,11 @@ include $(MAKE_INCLUDE_GEN)
 #                               VARIABLES	                              #
 #*****************************************************************************#
 
-
-MODULE_IFLAGS += -I../include
-
 #*****************************************************************************#
 #                               Source FILE LIST                              #
 #*****************************************************************************#
 
-CSRC = library/aesni.o			\
+OBJS = library/aesni.o			\
        library/ccm.o			\
        library/cipher.o			\
        library/cipher_wrap.o		\
@@ -46,23 +43,13 @@ CSRC = library/aesni.o			\
        library/x509_csr.o		\
        library/x509write_crt.o		\
        library/x509write_csr.o		\
+       library/net.o		\
        ../ssl_ram_map/ssl_ram_map.o	\
        ssl_self_test.o
-
-ROM_CSRC =
-
-ifeq ($(CONFIG_NORMAL_BUILD),y) #Normal
-	CSRC += $(ROM_CSRC)
-else ifeq ($(CONFIG_RELEASE_BUILD),y) #CONFIG_RELEASE_BUILD
-	CSRC = 
-else
-	# Not change CSRC
-endif
 
 #*****************************************************************************#
 #                               Object FILE LIST                              #
 #*****************************************************************************#
-OBJS        = $(CSRC)
 
 #*****************************************************************************#
 #                               Include Dependency                            #
@@ -84,14 +71,10 @@ CORE_TARGETS: $(OBJS)
 #*****************************************************************************#
 #              CLEAN GENERATED FILES                                          #
 #*****************************************************************************#
-clean: 
-	$(REMOVE) library/*.o
-	$(REMOVE) library/*.i
-	$(REMOVE) library/*.s
-	$(REMOVE) library/*.d
-	$(REMOVE) ../ssl_ram_map/*.o
-	$(REMOVE) ../ssl_ram_map/*.i
-	$(REMOVE) ../ssl_ram_map/*.s
-	$(REMOVE) ../ssl_ram_map/*.d
+clean: CLEAN_OBJS 
+	$(REMOVE) *.o
+	$(REMOVE) *.d
+	$(REMOVE) *.s
+	$(REMOVE) *.i
 
 -include $(DEPS)

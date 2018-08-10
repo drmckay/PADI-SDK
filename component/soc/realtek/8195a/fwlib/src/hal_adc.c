@@ -343,6 +343,14 @@ RtkADCGetMngtAdpt(
 #endif
 
     /*To assign user callback pointers*/
+    pSalADCMngtAdpt->pUserCB->pRXCB     = pSalADCUserCBAdpt;
+    pSalADCMngtAdpt->pUserCB->pRXCCB    = (pSalADCUserCBAdpt+1);
+    pSalADCMngtAdpt->pUserCB->pERRCB    = (pSalADCUserCBAdpt+2);
+    pSalADCMngtAdpt->pUserCB->pIDMARXCCB= (pSalADCUserCBAdpt+3);
+    pSalADCMngtAdpt->pUserCB->pDMARXCB  = (pSalADCUserCBAdpt+4);
+    pSalADCMngtAdpt->pUserCB->pDMARXCCB = (pSalADCUserCBAdpt+5);
+
+/*
     pSalADCMngtAdpt->pUserCB->pTXCB     = pSalADCUserCBAdpt;
     pSalADCMngtAdpt->pUserCB->pTXCCB    = (pSalADCUserCBAdpt+1);
     pSalADCMngtAdpt->pUserCB->pRXCB     = (pSalADCUserCBAdpt+2);
@@ -353,7 +361,7 @@ RtkADCGetMngtAdpt(
     pSalADCMngtAdpt->pUserCB->pDMATXCCB = (pSalADCUserCBAdpt+7);
     pSalADCMngtAdpt->pUserCB->pDMARXCB  = (pSalADCUserCBAdpt+8);
     pSalADCMngtAdpt->pUserCB->pDMARXCCB = (pSalADCUserCBAdpt+9);
-    
+*/
     /*To assign the rest pointers*/
     pSalADCMngtAdpt->pSalHndPriv->ppSalADCHnd = (void**)&(pSalADCMngtAdpt->pSalHndPriv);
 
@@ -405,7 +413,7 @@ RtkADCFreeMngtAdpt(
     IN  PSAL_ADC_MNGT_ADPT  pSalADCMngtAdpt
 ){
 #ifdef CONFIG_KERNEL
-    RtlMfree((u8 *)pSalADCMngtAdpt->pUserCB->pTXCB, (sizeof(SAL_ADC_USERCB_ADPT)*SAL_ADC_USER_CB_NUM));
+    RtlMfree((u8 *)pSalADCMngtAdpt->pUserCB->pRXCB, (sizeof(SAL_ADC_USERCB_ADPT)*SAL_ADC_USER_CB_NUM));
     RtlMfree((u8 *)pSalADCMngtAdpt->pIrqGdmaHnd, sizeof(IRQ_HANDLE));
     RtlMfree((u8 *)pSalADCMngtAdpt->pHalGdmaOp, sizeof(HAL_GDMA_OP));
     RtlMfree((u8 *)pSalADCMngtAdpt->pHalGdmaAdp, sizeof(HAL_GDMA_ADAPTER));
@@ -491,7 +499,7 @@ ADCISRHandle(
     ADCIrqIdx       = pHalADCInitDat->ADCIdx;
     pSalADCUserCB   = pSalADCHND->pUserCB;
 
-    DBG_8195A_ADC_LVL(HAL_ADC_LVL,"ADC INTR STS:%x\n",pHalADCOP->HalADCReadReg(pHalADCInitDat, REG_ADC_INTR_STS));
+    DBG_8195A_ADC_LVL(HAL_ADC_LVL,"ADC INTR STS:%x\n\n",pHalADCOP->HalADCReadReg(pHalADCInitDat, REG_ADC_INTR_STS));
 #else
     PSAL_ADC_HND        pSalADCHND          = (PSAL_ADC_HND) Data;
     PSAL_ADC_HND_PRIV   pSalADCHNDPriv      = NULL;
@@ -538,9 +546,10 @@ ADCGDMAISRHandle(
 
     PHAL_GDMA_ADAPTER   pHalADCGdmaAdapter;
     PHAL_GDMA_OP        pHalADCGdmaOp;
-
-
+    PIRQ_HANDLE         pIrqHandleADCGdma   = NULL;
+    
     u8  IsrTypeMap = 0;
+    u32 AdcTempDat;
     
     /* To get the SAL_I2C_MNGT_ADPT pointer, and parse the rest pointers */
     pSalADCHNDPriv  = CONTAINER_OF(pSalADCHND, SAL_ADC_HND_PRIV, SalADCHndPriv);
@@ -552,25 +561,42 @@ ADCGDMAISRHandle(
     
     pHalADCGdmaAdapter  = pSalADCMngtAdpt->pHalGdmaAdp;
     pHalADCGdmaOp       = pSalADCMngtAdpt->pHalGdmaOp;
-    
+
+    pIrqHandleADCGdma   = pSalADCMngtAdpt->pIrqGdmaHnd;
     DBG_8195A_ADC_LVL(HAL_ADC_LVL,"%s\n",__func__);
     
     if ((pHalADCGdmaAdapter->MaxMuliBlock) == pHalADCGdmaAdapter->MuliBlockCunt+1) {
 		pSalADCHND->pInitDat->ADCIntrMSK    =   0;
         pHalADCOP->HalADCIntrCtrl(pSalADCHND->pInitDat);
 		
-		/* Clear ADC Status */
+        AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+    	AdcTempDat &= (~0x01);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD0, AdcTempDat);
+    	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+
+
+    	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+    	AdcTempDat &= (~0x01);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+    	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+
+        /* Clear ADC Status */
 		HAL_ADC_READ32(REG_ADC_INTR_STS);
-		
-        pSalADCHND->pInitDat->ADCEn = ADC_DISABLE;
-        pHalADCOP->HalADCEnable(pSalADCHND->pInitDat);
+        
         pHalADCGdmaOp->HalGdmaChCleanAutoSrc(pHalADCGdmaAdapter);
-        pHalADCGdmaOp->HalGdmaChDis(pHalADCGdmaAdapter);
+        //pHalADCGdmaOp->HalGdmaChDis(pHalADCGdmaAdapter);
+        RtkADCDMADeInit(pSalADCHND);
         pSalADCHND->DevSts  = ADC_STS_IDLE;
 
-        if (pSalADCUserCB->pDMARXCCB->USERCB != NULL) {
+        /* user callback */
+        if (pSalADCUserCB->pIDMARXCCB->USERCB != NULL) {
+            pSalADCUserCB->pIDMARXCCB->USERCB((VOID*)pSalADCUserCB->pIDMARXCCB->USERData);
+        } else if (pSalADCUserCB->pDMARXCCB->USERCB != NULL) {
             pSalADCUserCB->pDMARXCCB->USERCB((VOID*)pSalADCUserCB->pDMARXCCB->USERData);
         }
+
+        //InterruptDis(pIrqHandleADCGdma);
+        //InterruptUnRegister(pIrqHandleADCGdma);        
     }
 
     //3 Clear Pending ISR
@@ -1410,79 +1436,62 @@ RtkADCRxManualRotate(
 		;
 	}
 
-    /* Start rotation sequence, ad1[7][5][4][3][2][1]=000001 */
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-    AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
-    AdcTempDat |= (BIT1);
-	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
-    HalDelayUs(500);
-    
-	/* Start rotation sequence, ad1[7][5][4][3][2][1]=000110 */
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-    AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
-    AdcTempDat |= (BIT3|BIT2);
-	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
-    HalDelayUs(500);
+    if (pSalADCHND->DevNum < 2) {
+        /* Start rotation sequence, ad1[7][5][4][3][2][1]=000001 */
+        AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+        AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
+        AdcTempDat |= (BIT1);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+        HalDelayUs(500);
+        
+    	/* Start rotation sequence, ad1[7][5][4][3][2][1]=000110 */
+        AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+        AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
+        AdcTempDat |= (BIT3|BIT2);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+        HalDelayUs(500);
 
-    /* Read Content */
-    for (tempcnt=0; tempcnt<16; tempcnt++){
-        ADCDatBuf[0]    = (u32)HAL_ADC_READ32(REG_ADC_FIFO_READ);            
+        /* Read Content */
+        for (tempcnt=0; tempcnt<16; tempcnt++){
+            ADCDatBuf[0]    = (u32)HAL_ADC_READ32(REG_ADC_FIFO_READ);            
+        }
+    }else {
+        /* Open ADC */
+        AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+    	DBG_ADC_INFO("RtkADCRxManualRotate, Before set, Reg AD1:%x\n", AdcTempDat);
+    	AdcTempDat |= (BIT0);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+    	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+    	DBG_ADC_INFO("RtkADCRxManualRotate, After set, Reg AD1:%x\n", AdcTempDat);
+    	
+    	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+    	DBG_ADC_INFO("RtkADCRxManualRotate, Before set, Reg AD0:%x\n", AdcTempDat);
+    	AdcTempDat |= (0x01);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD0, AdcTempDat);
+    	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+    	DBG_ADC_INFO("RtkADCRxManualRotate, After set, Reg AD0:%x\n", AdcTempDat);
+        
+    	/* Start rotation sequence, ad1[7][5][4][3][2][1]=001010 */
+        AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+        AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
+        AdcTempDat |= (BIT4|BIT2);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+        HalDelayUs(500);
+        
+    	/* Start rotation sequence, ad1[7][5][4][3][2][1]=010010 */
+        AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+        AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
+        AdcTempDat |= (BIT5|BIT2);
+    	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+        HalDelayUs(500);
+
+        //DBG_8195A("INT STAT:%08x\n", HAL_ADC_READ32(REG_ADC_INTR_STS));
+    	/* Read ADC FIFO */
+    	/* Read Content */
+        for (tempcnt=0; tempcnt<16; tempcnt++){
+            ADCDatBuf[1]    = (u32)HAL_ADC_READ32(REG_ADC_FIFO_READ);            
+        }
     }
-    
-    /* Close ADC */ 
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
-    DBG_ADC_INFO("RtkADCRxManualRotate, End of ADC, Before set, AD0:%x\n", AdcTempDat);
-    AdcTempDat &= (~0x01);
-    HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD0, AdcTempDat);
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
-    DBG_ADC_INFO("RtkADCRxManualRotate, End of ADC, After set, AD0:%x\n", AdcTempDat);
-
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-    DBG_ADC_INFO("RtkADCRxManualRotate, End of ADC, Before set, AD1:%x\n", AdcTempDat);
-    AdcTempDat &= (~0x01);    
-    HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-    DBG_ADC_INFO("RtkADCRxManualRotate, End of ADC, After set, AD1:%x\n", AdcTempDat);
-
-    /* Clear ADC Status */
-    HAL_ADC_READ32(REG_ADC_INTR_STS);
-    
-    /* Open ADC */
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-	DBG_ADC_INFO("RtkADCRxManualRotate, Before set, Reg AD1:%x\n", AdcTempDat);
-	AdcTempDat |= (BIT0);
-	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
-	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-	DBG_ADC_INFO("RtkADCRxManualRotate, After set, Reg AD1:%x\n", AdcTempDat);
-	
-	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
-	DBG_ADC_INFO("RtkADCRxManualRotate, Before set, Reg AD0:%x\n", AdcTempDat);
-	AdcTempDat |= (0x01);
-	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD0, AdcTempDat);
-	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
-	DBG_ADC_INFO("RtkADCRxManualRotate, After set, Reg AD0:%x\n", AdcTempDat);
-    
-	/* Start rotation sequence, ad1[7][5][4][3][2][1]=001010 */
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-    AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
-    AdcTempDat |= (BIT4|BIT2);
-	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
-    HalDelayUs(500);
-    
-	/* Start rotation sequence, ad1[7][5][4][3][2][1]=010010 */
-    AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
-    AdcTempDat &= ~(BIT7|BIT5|BIT4|BIT3|BIT2|BIT1);
-    AdcTempDat |= (BIT5|BIT2);
-	HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
-    HalDelayUs(500);
-
-    //DBG_8195A("INT STAT:%08x\n", HAL_ADC_READ32(REG_ADC_INTR_STS));
-	/* Read ADC FIFO */
-	/* Read Content */
-    for (tempcnt=0; tempcnt<16; tempcnt++){
-        ADCDatBuf[1]    = (u32)HAL_ADC_READ32(REG_ADC_FIFO_READ);            
-    }
-	
 
     /* Close ADC */	
 	AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
@@ -1789,5 +1798,90 @@ RtkADCEnablePS(
 #endif
 
     return HAL_OK;
+}
+
+
+u32
+RtkADCReceiveDMA(
+    IN  VOID *Data,
+    IN  u8 multiblock
+){
+    PSAL_ADC_HND        pSalADCHND          = (PSAL_ADC_HND) Data;
+    PSAL_ADC_HND_PRIV   pSalADCHNDPriv      = NULL;
+    PSAL_ADC_MNGT_ADPT  pSalADCMngtAdpt     = NULL;
+    PHAL_GDMA_ADAPTER   pHALADCGdmaAdpt     = NULL;
+    PHAL_GDMA_OP        pHALADCGdmaOp       = NULL;
+    PHAL_ADC_OP         pHalADCOP           = NULL; 
+    u32 AdcTempDat;
+    
+    /* To Get the SAL_I2C_MNGT_ADPT Pointer */
+    pSalADCHNDPriv  = CONTAINER_OF(pSalADCHND, SAL_ADC_HND_PRIV, SalADCHndPriv);
+    pSalADCMngtAdpt = CONTAINER_OF(pSalADCHNDPriv->ppSalADCHnd, SAL_ADC_MNGT_ADPT, pSalHndPriv);
+    
+    pHALADCGdmaAdpt     = pSalADCMngtAdpt->pHalGdmaAdp;
+    pHALADCGdmaOp       = pSalADCMngtAdpt->pHalGdmaOp;
+    pHalADCOP           = pSalADCMngtAdpt->pHalOp;
+	
+    if (pSalADCHND->OpType == ADC_DMA_TYPE) {
+        RtkADCDMAInit(pSalADCHND);
+        
+		/* Clear ADC Status */
+		HAL_ADC_READ32(REG_ADC_INTR_STS);
+		if (multiblock == 0) {
+            HalGdmaOpInit(pHALADCGdmaOp);
+            pHALADCGdmaAdpt->GdmaCtl.BlockSize  =   pSalADCHND->pRXBuf->DataLen;
+            pHALADCGdmaAdpt->ChSar              =   (u32)(ADC_REG_BASE);
+            pHALADCGdmaAdpt->ChDar              =   (u32)pSalADCHND->pRXBuf->pDataBuf;
+            pHALADCGdmaAdpt->MuliBlockCunt      = 0;
+            
+            pHALADCGdmaOp->HalGdmaChSeting(pHALADCGdmaAdpt);
+            pHALADCGdmaOp->HalGdmaChEn(pHALADCGdmaAdpt);
+
+            DBG_ADC_INFO("RtkADCReceiveDMA, Check to enable ADC manully or not\n");
+            pSalADCHND->DevSts  = ADC_STS_RX_ING;
+            AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_POWER);
+        	if (unlikely((AdcTempDat & 0x00000008) == 0)) {
+        		;
+        	}
+        	else {
+        		pSalADCHND->pInitDat->ADCEn = ADC_ENABLE;
+            	pHalADCOP->HalADCEnable(pSalADCHND->pInitDat);  
+        	}
+
+            AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+
+        	if ((AdcTempDat & 0x00000001) == 0){
+                pSalADCHND->pInitDat->ADCIntrMSK  =  (BIT_ADC_FIFO_FULL_EN);
+                pHalADCOP->HalADCIntrCtrl(pSalADCHND->pInitDat);
+
+                AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+        		DBG_ADC_INFO("RtkADCReceiveDMA, Before set, Reg AD1:%x\n", AdcTempDat);
+
+        		AdcTempDat |= (0x01);
+        		HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD1, AdcTempDat);
+        		AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD1);
+        		DBG_ADC_INFO("RtkADCReceiveDMA, After set, Reg AD1:%x\n", AdcTempDat);
+
+        		AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+        		DBG_ADC_INFO("RtkADCReceiveDMA, Before set, Reg AD0:%x\n", AdcTempDat);
+
+        		AdcTempDat |= (0x01);
+        		HAL_ADC_WRITE32(REG_ADC_ANAPAR_AD0, AdcTempDat);
+        		AdcTempDat  = (u32)HAL_ADC_READ32(REG_ADC_ANAPAR_AD0);
+        		DBG_ADC_INFO("RtkADCReceiveDMA, After set, Reg AD0:%x\n", AdcTempDat);
+
+        	}
+        	else{
+        		;
+        	}
+           
+            return _EXIT_SUCCESS;
+        } else {
+            /* multi block is NOT support. */
+            return _EXIT_FAILURE;
+        }
+    }
+    
+    return _EXIT_FAILURE;
 }
 

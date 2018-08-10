@@ -223,7 +223,7 @@ HalDACSendRtl8195a(
     IN  VOID    *Data
 ){
 
-
+	Data = Data;
     return (0);
 }
 

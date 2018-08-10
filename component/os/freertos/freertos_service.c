@@ -349,7 +349,15 @@ static u32 _freertos_sec_to_systime(u32 sec)
 
 static void _freertos_msleep_os(int ms)
 {
+#if defined(CONFIG_PLATFORM_8195A)
 	vTaskDelay(ms / portTICK_RATE_MS);
+#elif defined(CONFIG_PLATFORM_8711B)
+	if (pmu_yield_os_check()) {
+		vTaskDelay(ms / portTICK_RATE_MS);
+	} else {
+		DelayMs(ms);
+	}
+#endif
 }
 
 static void _freertos_usleep_os(int us)
@@ -357,8 +365,10 @@ static void _freertos_usleep_os(int us)
 #if defined(STM32F2XX) || defined(STM32F4XX) || defined(STM32F10X_XL)
 	// FreeRTOS does not provide us level delay. Use busy wait
 	WLAN_BSP_UsLoop(us);
-#elif defined(CONFIG_PLATFORM_8195A) || defined(CONFIG_PLATFORM_8711B)
+#elif defined(CONFIG_PLATFORM_8195A)
 	//DBG_ERR("%s: Please Implement micro-second delay\n", __FUNCTION__);
+#elif defined(CONFIG_PLATFORM_8711B)
+	DelayUs(us);
 #else
 	#error "Please implement hardware dependent micro second level sleep here"
 #endif
@@ -374,8 +384,10 @@ static void _freertos_udelay_os(int us)
 #if defined(STM32F2XX)	|| defined(STM32F4XX) || defined(STM32F10X_XL)
 	// FreeRTOS does not provide us level delay. Use busy wait
 	WLAN_BSP_UsLoop(us);
-#elif defined(CONFIG_PLATFORM_8195A) || defined(CONFIG_PLATFORM_8711B)
-	RtlUdelayOS(us);
+#elif defined(CONFIG_PLATFORM_8195A)
+	HalDelayUs(us);
+#elif defined(CONFIG_PLATFORM_8711B)
+	DelayUs(us);
 #else
 	#error "Please implement hardware dependent micro second level sleep here"
 #endif
@@ -383,7 +395,15 @@ static void _freertos_udelay_os(int us)
 
 static void _freertos_yield_os(void)
 {
+#if defined(CONFIG_PLATFORM_8195A)
 	taskYIELD();
+#elif defined(CONFIG_PLATFORM_8711B)
+	if (pmu_yield_os_check()) {
+		taskYIELD();
+	} else {
+		DelayMs(1);
+	}
+#endif
 }
 
 static void _freertos_ATOMIC_SET(ATOMIC_T *v, int i)
@@ -476,6 +496,14 @@ static int _freertos_arc4random(void)
 {
 	u32 res = xTaskGetTickCount();
 	static unsigned long seed = 0xDEADB00B;
+
+#if CONFIG_PLATFORM_8711B
+	if(random_seed){
+		seed = random_seed;
+		random_seed = 0;
+	}
+#endif
+	
 	seed = ((seed & 0x007F00FF) << 7) ^
 	    ((seed & 0x0F80FF00) >> 8) ^ // be sure to stir those low bits
 	    (res << 13) ^ (res >> 9);    // using the clock too!
@@ -544,30 +572,43 @@ static int _freertos_create_task(struct task_struct *ptask, const char *name,
 
 	priority += tskIDLE_PRIORITY + PRIORITIE_OFFSET;
 
+	if(rtw_if_wifi_thread(name) == 0){
+
 #if CONFIG_USE_TCM_HEAP
-	void *stack_addr = tcm_heap_malloc(stack_size*sizeof(int));
-	//void *stack_addr = rtw_malloc(stack_size*sizeof(int));
-	if(stack_addr == NULL){
-		DBG_INFO("Out of TCM heap in \"%s\" ", ptask->task_name);
-	}
-	ret = xTaskGenericCreate(
-			task_func,
-			(const char *)name,
-			stack_size,
-			task_ctx,
-			priority,
-			&ptask->task,
-			stack_addr,
-			NULL);
+		void *stack_addr = tcm_heap_malloc(stack_size*sizeof(int));
+		//void *stack_addr = rtw_malloc(stack_size*sizeof(int));
+		if(stack_addr == NULL){
+			DBG_INFO("Out of TCM heap in \"%s\" ", ptask->task_name);
+		}
+		ret = xTaskGenericCreate(
+				task_func,
+				(const char *)name,
+				stack_size,
+				task_ctx,
+				priority,
+				&ptask->task,
+				stack_addr,
+				NULL);
 #else							 
-	ret = xTaskCreate(
-			task_func,
-			(const char *)name,
-			stack_size,
-			task_ctx,
-			priority,
-			&ptask->task);
+		ret = xTaskCreate(
+				task_func,
+				(const char *)name,
+				stack_size,
+				task_ctx,
+				priority,
+				&ptask->task);
 #endif
+	}
+	else{
+		ret = xTaskCreate(
+				task_func,
+				(const char *)name,
+				stack_size,
+				task_ctx,
+				priority,
+				&ptask->task);
+
+	}
 	if(ret != pdPASS){
 		DBG_ERR("Create Task \"%s\" Failed! ret=%d\n", ptask->task_name, ret);
 	}
@@ -650,18 +691,96 @@ u32  _freertos_timerChangePeriod( _timerHandle xTimer,
 		xNewPeriod += 1;
 	return (u32)xTimerChangePeriod(xTimer, xNewPeriod, xBlockTime);	
 }
+void *_freertos_timerGetID( _timerHandle xTimer ){
+
+	return pvTimerGetTimerID(xTimer);
+}
+
+u32  _freertos_timerStart( _timerHandle xTimer, 
+							   osdepTickType xBlockTime )
+{
+	return (u32)xTimerStart(xTimer, xBlockTime);	
+}
+
+u32  _freertos_timerStartFromISR( _timerHandle xTimer, 
+							   osdepBASE_TYPE *pxHigherPriorityTaskWoken )
+{
+	return (u32)xTimerStartFromISR(xTimer, pxHigherPriorityTaskWoken);	
+}
+
+u32  _freertos_timerStopFromISR( _timerHandle xTimer, 
+							   osdepBASE_TYPE *pxHigherPriorityTaskWoken )
+{
+	return (u32)xTimerStopFromISR(xTimer, pxHigherPriorityTaskWoken);	
+}
+
+u32  _freertos_timerResetFromISR( _timerHandle xTimer, 
+							   osdepBASE_TYPE *pxHigherPriorityTaskWoken )
+{
+	return (u32)xTimerResetFromISR(xTimer, pxHigherPriorityTaskWoken);	
+}
+
+u32  _freertos_timerChangePeriodFromISR( _timerHandle xTimer, 
+							   osdepTickType xNewPeriod, 
+							   osdepBASE_TYPE *pxHigherPriorityTaskWoken )
+{
+	if(xNewPeriod == 0)
+		xNewPeriod += 1;
+	return (u32)xTimerChangePeriodFromISR(xTimer, xNewPeriod, pxHigherPriorityTaskWoken);
+}
+
+u32  _freertos_timerReset( _timerHandle xTimer, 
+							   osdepTickType xBlockTime )
+{
+	return (u32)xTimerReset(xTimer, xBlockTime);	
+}
 
 void _freertos_acquire_wakelock()
 {
+#if defined(CONFIG_PLATFORM_8195A)
+
 #if defined(configUSE_WAKELOCK_PMU) && (configUSE_WAKELOCK_PMU == 1)
-    acquire_wakelock(WAKELOCK_WLAN);
+   	pmu_acquire_wakelock(PMU_WLAN_DEVICE);
+#endif
+	
+#elif defined(CONFIG_PLATFORM_8711B)
+
+#if defined(configUSE_WAKELOCK_PMU) && (configUSE_WAKELOCK_PMU == 1)
+	if (pmu_yield_os_check()) 
+   		 pmu_acquire_wakelock(PMU_WLAN_DEVICE);
+#endif
+
 #endif
 }
 
 void _freertos_release_wakelock()
 {
+
+#if defined(CONFIG_PLATFORM_8195A)
+
 #if defined(configUSE_WAKELOCK_PMU) && (configUSE_WAKELOCK_PMU == 1)
-    release_wakelock(WAKELOCK_WLAN);
+    pmu_release_wakelock(PMU_WLAN_DEVICE);
+#endif
+	
+#elif defined(CONFIG_PLATFORM_8711B)
+
+#if defined(configUSE_WAKELOCK_PMU) && (configUSE_WAKELOCK_PMU == 1)
+	if (pmu_yield_os_check()) 
+		pmu_release_wakelock(PMU_WLAN_DEVICE);
+#endif
+
+#endif
+}
+
+void _freertos_wakelock_timeout(uint32_t timeout)
+{
+#if defined(CONFIG_PLATFORM_8195A)
+	
+#elif defined(CONFIG_PLATFORM_8711B)
+	if (pmu_yield_os_check()) 
+		pmu_set_sysactive_time(PMU_WLAN_DEVICE, timeout);
+	else
+		DBG_INFO("can't aquire wake during suspend flow!!\n");
 #endif
 }
 
@@ -678,84 +797,91 @@ u8 _freertos_get_scheduler_state(void)
 
 
 const struct osdep_service_ops osdep_service = {
-	_freertos_malloc,		//rtw_vmalloc
-	_freertos_zmalloc,		//rtw_zvmalloc
+	_freertos_malloc,			//rtw_vmalloc
+	_freertos_zmalloc,			//rtw_zvmalloc
 	_freertos_mfree,			//rtw_vmfree
-	_freertos_malloc, //rtw_malloc
-	_freertos_zmalloc, //rtw_zmalloc
-	_freertos_mfree, //rtw_mfree
-	_freertos_memcpy, //rtw_memcpy
-	_freertos_memcmp, //rtw_memcmp
-	_freertos_memset, //rtw_memset
-	_freertos_init_sema, //rtw_init_sema
-	_freertos_free_sema, //rtw_free_sema
-	_freertos_up_sema, //rtw_up_sema
-	_freertos_up_sema_from_isr,//rtw_up_sema_from_isr
-	_freertos_down_sema, //rtw_down_sema
-	_freertos_mutex_init, //rtw_mutex_init
-	_freertos_mutex_free, //rtw_mutex_free
-	_freertos_mutex_get, //rtw_mutex_get
-	_freertos_mutex_get_timeout, //rtw_mutex_get_timeout
-	_freertos_mutex_put, //rtw_mutex_put
-	_freertos_enter_critical,		//rtw_enter_critical
-	_freertos_exit_critical,		//rtw_exit_critical
-	_freertos_enter_critical_from_isr,		//rtw_enter_critical_from_isr
-	_freertos_exit_critical_from_isr,		//rtw_exit_critical_from_isr
+	_freertos_malloc,			//rtw_malloc
+	_freertos_zmalloc,			//rtw_zmalloc
+	_freertos_mfree,			//rtw_mfree
+	_freertos_memcpy,			//rtw_memcpy
+	_freertos_memcmp,			//rtw_memcmp
+	_freertos_memset,			//rtw_memset
+	_freertos_init_sema,		//rtw_init_sema
+	_freertos_free_sema,		//rtw_free_sema
+	_freertos_up_sema,			//rtw_up_sema
+	_freertos_up_sema_from_isr,	//rtw_up_sema_from_isr
+	_freertos_down_sema,		//rtw_down_sema
+	_freertos_mutex_init,		//rtw_mutex_init
+	_freertos_mutex_free,		//rtw_mutex_free
+	_freertos_mutex_get,		//rtw_mutex_get
+	_freertos_mutex_get_timeout,//rtw_mutex_get_timeout
+	_freertos_mutex_put,		//rtw_mutex_put
+	_freertos_enter_critical,	//rtw_enter_critical
+	_freertos_exit_critical,	//rtw_exit_critical
+	_freertos_enter_critical_from_isr,	//rtw_enter_critical_from_isr
+	_freertos_exit_critical_from_isr,	//rtw_exit_critical_from_isr
 	NULL,		//rtw_enter_critical_bh
 	NULL,		//rtw_exit_critical_bh
-	_freertos_enter_critical_mutex,		//rtw_enter_critical_mutex
-	_freertos_exit_critical_mutex,		//rtw_exit_critical_mutex
-	_freertos_spinlock_init, //rtw_spinlock_init
-	_freertos_spinlock_free, //rtw_spinlock_free
-	_freertos_spinlock, //rtw_spin_lock
-	_freertos_spinunlock, //rtw_spin_unlock
-	_freertos_spinlock_irqsave,	//rtw_spinlock_irqsave
-	_freertos_spinunlock_irqsave,//rtw_spinunlock_irqsave
-	_freertos_init_xqueue,//rtw_init_xqueue
-	_freertos_push_to_xqueue,//rtw_push_to_xqueue
-	_freertos_pop_from_xqueue,//rtw_pop_from_xqueue
-	_freertos_deinit_xqueue,//rtw_deinit_xqueue
-	_freertos_get_current_time, //rtw_get_current_time
-	_freertos_systime_to_ms, //rtw_systime_to_ms
-	_freertos_systime_to_sec, //rtw_systime_to_sec
-	_freertos_ms_to_systime, //rtw_ms_to_systime
-	_freertos_sec_to_systime, //rtw_sec_to_systime
-	_freertos_msleep_os, //rtw_msleep_os
-	_freertos_usleep_os, //rtw_usleep_os
-	_freertos_mdelay_os, //rtw_mdelay_os
-	_freertos_udelay_os, //rtw_udelay_os
-	_freertos_yield_os, //rtw_yield_os
+	_freertos_enter_critical_mutex,	//rtw_enter_critical_mutex
+	_freertos_exit_critical_mutex,	//rtw_exit_critical_mutex
+	_freertos_spinlock_init,		//rtw_spinlock_init
+	_freertos_spinlock_free,		//rtw_spinlock_free
+	_freertos_spinlock,				//rtw_spin_lock
+	_freertos_spinunlock,			//rtw_spin_unlock
+	_freertos_spinlock_irqsave,		//rtw_spinlock_irqsave
+	_freertos_spinunlock_irqsave,	//rtw_spinunlock_irqsave
+	_freertos_init_xqueue,			//rtw_init_xqueue
+	_freertos_push_to_xqueue,		//rtw_push_to_xqueue
+	_freertos_pop_from_xqueue,		//rtw_pop_from_xqueue
+	_freertos_deinit_xqueue,		//rtw_deinit_xqueue
+	_freertos_get_current_time,		//rtw_get_current_time
+	_freertos_systime_to_ms,		//rtw_systime_to_ms
+	_freertos_systime_to_sec,		//rtw_systime_to_sec
+	_freertos_ms_to_systime,		//rtw_ms_to_systime
+	_freertos_sec_to_systime,		//rtw_sec_to_systime
+	_freertos_msleep_os,	//rtw_msleep_os
+	_freertos_usleep_os,	//rtw_usleep_os
+	_freertos_mdelay_os,	//rtw_mdelay_os
+	_freertos_udelay_os,	//rtw_udelay_os
+	_freertos_yield_os,		//rtw_yield_os
 	
-	_freertos_ATOMIC_SET, //ATOMIC_SET
-	_freertos_ATOMIC_READ, //ATOMIC_READ
-	_freertos_ATOMIC_ADD, //ATOMIC_ADD
-	_freertos_ATOMIC_SUB, //ATOMIC_SUB
-	_freertos_ATOMIC_INC, //ATOMIC_INC
-	_freertos_ATOMIC_DEC, //ATOMIC_DEC
-	_freertos_ATOMIC_ADD_RETURN, //ATOMIC_ADD_RETURN
-	_freertos_ATOMIC_SUB_RETURN, //ATOMIC_SUB_RETURN
-	_freertos_ATOMIC_INC_RETURN, //ATOMIC_INC_RETURN
-	_freertos_ATOMIC_DEC_RETURN, //ATOMIC_DEC_RETURN
+	_freertos_ATOMIC_SET,	//ATOMIC_SET
+	_freertos_ATOMIC_READ,	//ATOMIC_READ
+	_freertos_ATOMIC_ADD,	//ATOMIC_ADD
+	_freertos_ATOMIC_SUB,	//ATOMIC_SUB
+	_freertos_ATOMIC_INC,	//ATOMIC_INC
+	_freertos_ATOMIC_DEC,	//ATOMIC_DEC
+	_freertos_ATOMIC_ADD_RETURN,	//ATOMIC_ADD_RETURN
+	_freertos_ATOMIC_SUB_RETURN,	//ATOMIC_SUB_RETURN
+	_freertos_ATOMIC_INC_RETURN,	//ATOMIC_INC_RETURN
+	_freertos_ATOMIC_DEC_RETURN,	//ATOMIC_DEC_RETURN
 
-	_freertos_modular64, //rtw_modular64
-	_freertos_get_random_bytes,			//rtw_get_random_bytes
+	_freertos_modular64,			//rtw_modular64
+	_freertos_get_random_bytes,		//rtw_get_random_bytes
 	_freertos_GetFreeHeapSize,		//rtw_getFreeHeapSize
 
-	_freertos_create_task,		//rtw_create_task
-	_freertos_delete_task,		//rtw_delete_task
-	_freertos_wakeup_task,		//rtw_wakeup_task
+	_freertos_create_task,			//rtw_create_task
+	_freertos_delete_task,			//rtw_delete_task
+	_freertos_wakeup_task,			//rtw_wakeup_task
 
-	_freertos_thread_enter,		//rtw_thread_enter
-	_freertos_thread_exit,		//rtw_thread_exit
+	_freertos_thread_enter,			//rtw_thread_enter
+	_freertos_thread_exit,			//rtw_thread_exit
 
-	_freertos_timerCreate,           //rtw_timerCreate,       
-	_freertos_timerDelete,           //rtw_timerDelete,       
-	_freertos_timerIsTimerActive,    //rtw_timerIsTimerActive,
-	_freertos_timerStop,             //rtw_timerStop,         
-	_freertos_timerChangePeriod,      //rtw_timerChangePeriod  
+	_freertos_timerCreate,			//rtw_timerCreate,       
+	_freertos_timerDelete,			//rtw_timerDelete,       
+	_freertos_timerIsTimerActive,	//rtw_timerIsTimerActive,
+	_freertos_timerStop,			//rtw_timerStop,         
+	_freertos_timerChangePeriod,	//rtw_timerChangePeriod 
+	_freertos_timerGetID,			//rtw_timerGetID
+	_freertos_timerStart,			//rtw_timerStart
+	_freertos_timerStartFromISR,	//rtw_timerStartFromISR
+	_freertos_timerStopFromISR,		//rtw_timerStopFromISR
+	_freertos_timerResetFromISR,	//rtw_timerResetFromISR
+	_freertos_timerChangePeriodFromISR,	//rtw_timerChangePeriodFromISR
+	_freertos_timerReset,			//rtw_timerReset
 
-	_freertos_acquire_wakelock,  // rtw_acquire_wakelock
-	_freertos_release_wakelock,  // rtw_release_wakelock
-
-	_freertos_get_scheduler_state  // rtw_get_scheduler_state
+	_freertos_acquire_wakelock,		//rtw_acquire_wakelock
+	_freertos_release_wakelock,		//rtw_release_wakelock
+	_freertos_wakelock_timeout,		//rtw_wakelock_timeout
+	_freertos_get_scheduler_state	//rtw_get_scheduler_state
 };

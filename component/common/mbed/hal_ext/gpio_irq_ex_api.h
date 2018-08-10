@@ -18,23 +18,48 @@
 
 #include "device.h"
 
-#if DEVICE_INTERRUPTIN
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/** @addtogroup gpio_irq_ex_api GPIO_IRQ_EX
+ *  @ingroup    hal
+ *  @brief      gpio IRQ extented functions
+ *  @{
+ */
+ 
+///@name Ameba Common 
+///@{
 typedef enum {
     IRQ_LOW = 3,
     IRQ_HIGH =4
 } gpio_irq_event_ex;
 
+/**
+  * @brief  Deinitializes the GPIO device interrupt mode, include mode/trigger/polarity registers.
+  * @param  obj: gpio irq object define in application software.
+  * @retval none
+  */
 void gpio_irq_deinit(gpio_irq_t *obj);
+
+/**
+  * @brief  Sets pull type to the selected interrupt pin.
+  * @param  obj: gpio irq object define in application software.
+  * @param  pull_type: this parameter can be one of the following values:
+  *		@arg PullNone: HighZ, user can input high or low use this pin
+  *		@arg OpenDrain(is OpenDrain output): no pull + OUT + GPIO[gpio_bit] = 0  
+  *		@arg PullDown: pull down
+  *		@arg PullUp: pull up 
+  * @retval none  
+  */
 void gpio_irq_pull_ctrl(gpio_irq_t *obj, PinMode pull_type);
+///@}
+
+/*\@}*/
+
 #ifdef __cplusplus
 }
 #endif
-
-#endif  // end of "#if DEVICE_INTERRUPTIN"
 
 #endif  // end of #ifndef MBED_GPIO_IRQ_EX_API_H

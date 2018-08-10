@@ -7,8 +7,7 @@
 #include <lwip_netconf.h>
 #include <lwip/netif.h>
 #include "flash_api.h"
-#include <rom_wac_aes.h>
-#include "rom_wac_curve25519-donna.h"
+#include "encrypt.h"
 #include "gpio_api.h"
 #include "gpio_irq_api.h"
 #include "cJSON.h"
@@ -20,7 +19,13 @@
 #define MAX_BUFFER_SIZE         256
 #define ENC_SIZE          64
 #define CONTROL_TYPE		1
+#ifdef CONFIG_PLATFORM_8195A
 #define GPIO_SOFTAP_RESET_PIN		PC_4
+#endif
+
+#ifdef CONFIG_PLATFORM_8711B
+#define GPIO_SOFTAP_RESET_PIN		PA_0
+#endif
 
 flash_t iot_flash;
 uint8_t aes_key[16];
@@ -146,7 +151,7 @@ void iotapp_platform_reset(void)
 
 void iotapp_reset_irq_handler(uint32_t id, gpio_irq_event event) 
 {
-	printf("\n\r\n\r\n\r\n\r<<<<<<Reset the device using PC_4>>>>>>>\n\r\n\r\n\r\n\r");
+	printf("\n\r\n\r\n\r\n\r<<<<<<Reset the device>>>>>>>\n\r\n\r\n\r\n\r");
 	flash_erase_sector(&iot_flash, FLASH_IOT_DATA);	
 	iotapp_platform_reset();
 }

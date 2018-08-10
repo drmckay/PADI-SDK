@@ -28,13 +28,17 @@
 @echo   	^<range^>CODE %1 0x%end2%^</range^> >> tmp.board
 @echo     ^<loader^>$PROJ_DIR$\..\..\..\component\soc\realtek\8195a\misc\iar_utility\common\flashloader\FlashRTL8195aMP.flash^</loader^>    >> tmp.board
 @echo     ^<abs_offset^>0xB000^</abs_offset^>  >> tmp.board
+if "%3"=="0xFFFFFFFF" (
+@echo     ^<args^>--end^</args^>  >> tmp.board 		
+)
 @echo   ^</pass^> >> tmp.board
 if NOT "%3"=="0xFFFFFFFF" (
 @echo   ^<pass^>    >> tmp.board
 @echo   	^<range^>CODE 0x30000000 0x%end3%^</range^>    >> tmp.board
 @echo     ^<loader^>$PROJ_DIR$\..\..\..\component\soc\realtek\8195a\misc\iar_utility\common\flashloader\FlashRTL8195aMP.flash^</loader^>    >> tmp.board  
 @echo     ^<abs_offset^>0x0000^</abs_offset^>  >> tmp.board  
-@echo     ^<args^>--cascade^</args^>  >> tmp.board  
+@echo     ^<args^>--cascade  >> tmp.board
+@echo     --end^</args^>  >> tmp.board  
 @echo   ^</pass^>    >> tmp.board
 )
 if NOT "%4"=="0xFFFFFFFF" (
@@ -48,6 +52,7 @@ if NOT "%4"=="0xFFFFFFFF" (
 @echo   ^<ignore^>CODE 0x10000000 0x10000bc7^</ignore^> >> tmp.board
 @echo   ^<ignore^>CODE %2 0x1006FFFF^</ignore^> >> tmp.board
 @echo   ^<ignore^>CODE 0x1FFF0000 0x1FFFFFFF^</ignore^> >> tmp.board
+@echo   ^<ignore^>CODE %3 0x3FFFFFFF^</ignore^> >> tmp.board
 @echo ^</flash_board^> >> tmp.board    >> tmp.board
 
 exit

@@ -79,16 +79,16 @@ void pwmout_free(pwmout_t* obj)
     HAL_Pwm_Disable(&obj->pwm_hal_adp);
 }
 
-void pwmout_write(pwmout_t* obj, float value) 
+void pwmout_write(pwmout_t* obj, float percent) 
 {
-    if (value < (float)0.0) {
-        value = 0.0;
+    if (percent < (float)0.0) {
+        percent = 0.0;
     } 
-    else if (value > (float)1.0) {
-        value = 1.0;
+    else if (percent > (float)1.0) {
+        percent = 1.0;
     }
 
-    obj->pulse = (uint32_t)((float)obj->period * value);
+    obj->pulse = (uint32_t)((float)obj->period * percent);
     HAL_Pwm_SetDuty(&obj->pwm_hal_adp, obj->period, obj->pulse);
 }
 

@@ -83,7 +83,7 @@ static rtw_result_t rtw_indicate_event_handle(int event_cmd, char *buf, int buf_
 }
 #endif
 
-void wifi_indication( WIFI_EVENT_INDICATE event, char *buf, int buf_len, int flags)
+void wifi_indication( rtw_event_indicate_t event, char *buf, int buf_len, int flags)
 {
 	//
 	// If upper layer application triggers additional operations on receiving of wext_wlan_indicate,
@@ -144,15 +144,15 @@ void wifi_indication( WIFI_EVENT_INDICATE event, char *buf, int buf_len, int fla
 			printf("\n\r%s(): WIFI_EVENT_NO_NETWORK\n", __func__);
 #endif
 			break;
+		case WIFI_EVENT_RX_MGNT:
+#if(WIFI_INDICATE_MSG==1)			
+			printf("\n\r%s(): WIFI_EVENT_RX_MGNT\n", __func__);
+#endif
+			break;
 #if CONFIG_ENABLE_P2P
 		case WIFI_EVENT_SEND_ACTION_DONE:
 #if(WIFI_INDICATE_MSG==1)			
 			printf("\n\r%s(): WIFI_EVENT_SEND_ACTION_DONE\n", __func__);
-#endif
-			break;
-		case WIFI_EVENT_RX_MGNT:
-#if(WIFI_INDICATE_MSG==1)			
-			printf("\n\r%s(): WIFI_EVENT_RX_MGNT\n", __func__);
 #endif
 			break;
 #endif //CONFIG_ENABLE_P2P

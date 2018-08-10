@@ -75,6 +75,22 @@ struct rtk_test_sc {
 	unsigned char		password[65];	
 	unsigned int		ip_addr;
 };
+// for softAP mode
+typedef enum {
+    SOFTAP_ERROR = -1,
+    SOFTAP_INIT,
+    SOFTAP_RECV_A,
+    SOFTAP_HANDSHAKE_DONE,
+    SOFTAP_DECODE_SUCCESS,
+} SC_softAP_status;
+
+#pragma pack(1)
+typedef struct _SC_softAP_decode_ctx {
+    u8      nonceA[16];
+    u8      nonceB[32];
+    u8      mac[6];
+    SC_softAP_status    softAP_decode_status;
+} SC_softAP_decode_ctx;
 
 /* expose data */
 extern s32 is_promisc_callback_unlock;
@@ -84,7 +100,9 @@ extern u8 g_security_mode;
 
 /* expose API */
 extern s32 rtk_sc_init(char *custom_pin_code, struct simple_config_lib_config* config);
+extern int rtl_pre_parse(u8 *mac_addr, u8 *buf, void *userdata, u8 **da, u8 **sa, unsigned int *len);
 extern s32 rtk_start_parse_packet(u8 *da, u8 *sa, s32 len,  void * user_data, void *backup_sc);
+extern SC_softAP_status softAP_simpleConfig_parse(unsigned char *buf, int len, void *backup_sc_ctx, void *psoftAP_ctx);
 extern void rtk_restart_simple_config(void);
 extern void rtk_sc_deinit();
 extern void wifi_enter_promisc_mode();

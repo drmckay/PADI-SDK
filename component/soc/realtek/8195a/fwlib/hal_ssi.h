@@ -271,7 +271,7 @@ struct spi_s {
     u32 irq_handler;
     u32 irq_id;
     u32 dma_en;
-    u32 state;
+    volatile u32 state;
     u8 sclk;
 #ifdef CONFIG_GDMA_EN    
     HAL_GDMA_ADAPTER spi_gdma_adp_tx;
@@ -298,6 +298,7 @@ HAL_Status HalSsiExitCritical(VOID * Data);
 HAL_Status HalSsiTimeout(u32 StartCount, u32 TimeoutCnt);
 HAL_Status HalSsiStopRecv(VOID * Data);
 HAL_Status HalSsiSetFormat(VOID * Data);
+VOID HalSsiClearFIFO(VOID * Data);
 #ifdef CONFIG_GDMA_EN    
 HAL_Status HalSsiTxGdmaInit(PHAL_SSI_OP pHalSsiOp, PHAL_SSI_ADAPTOR pHalSsiAdapter);
 VOID HalSsiTxGdmaDeInit(PHAL_SSI_ADAPTOR pHalSsiAdapter);

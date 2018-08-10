@@ -702,7 +702,6 @@ int des_crypt_cbc( des_context *ctx,
     {
         unsigned char key_buf[8 + 4], *key_buf_aligned;
         unsigned char iv_buf[8 + 4], *iv_buf_aligned, iv_tmp[8];
-        unsigned char *output_buf, *output_buf_aligned;
         size_t length_done = 0;
 
         if(length % 8)
@@ -712,14 +711,8 @@ int des_crypt_cbc( des_context *ctx,
         {
             key_buf_aligned = (unsigned char *) (((unsigned int) key_buf + 4) / 4 * 4);
             iv_buf_aligned = (unsigned char *) (((unsigned int) iv_buf + 4) / 4 * 4);
-            output_buf = polarssl_malloc(length + 4);
 
-            if(output_buf == NULL)
-                return -1;
-
-            output_buf_aligned = (unsigned char *) (((unsigned int) output_buf + 4) / 4 * 4);
             memcpy(iv_buf_aligned, iv, 8);
-            memset(output_buf, 0, length + 4);
 
             if(mode == DES_DECRYPT)
             {
@@ -729,13 +722,13 @@ int des_crypt_cbc( des_context *ctx,
                 while((length - length_done) > RTL_CRYPTO_FRAGMENT)
                 {
                     memcpy(iv_tmp, (input + length_done + RTL_CRYPTO_FRAGMENT - 8), 8);
-                    rom_ssl_ram_map.hw_crypto_des_cbc_decrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output_buf_aligned + length_done);
+                    rom_ssl_ram_map.hw_crypto_des_cbc_decrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output + length_done);
                     memcpy(iv_buf_aligned, iv_tmp, 8);
                     length_done += RTL_CRYPTO_FRAGMENT;
                 }
 
                 memcpy(iv_tmp, (input + length - 8), 8);
-                rom_ssl_ram_map.hw_crypto_des_cbc_decrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output_buf_aligned + length_done);
+                rom_ssl_ram_map.hw_crypto_des_cbc_decrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output + length_done);
                 memcpy(iv, iv_tmp, 8);
             }
             else
@@ -745,17 +738,14 @@ int des_crypt_cbc( des_context *ctx,
 
                 while((length - length_done) > RTL_CRYPTO_FRAGMENT)
                 {
-                    rom_ssl_ram_map.hw_crypto_des_cbc_encrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output_buf_aligned + length_done);
-                    memcpy(iv_buf_aligned, (output_buf_aligned + length_done + RTL_CRYPTO_FRAGMENT - 8), 8);
+                    rom_ssl_ram_map.hw_crypto_des_cbc_encrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output + length_done);
+                    memcpy(iv_buf_aligned, (output + length_done + RTL_CRYPTO_FRAGMENT - 8), 8);
                     length_done += RTL_CRYPTO_FRAGMENT;
                 }
 
-                rom_ssl_ram_map.hw_crypto_des_cbc_encrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output_buf_aligned + length_done);
-                memcpy(iv, (output_buf_aligned + length - 8), 8);
+                rom_ssl_ram_map.hw_crypto_des_cbc_encrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output + length_done);
+                memcpy(iv, (output + length - 8), 8);
             }
-
-            memcpy(output, output_buf_aligned, length);
-            polarssl_free(output_buf);
         }
 
         return 0;
@@ -868,7 +858,6 @@ int des3_crypt_cbc( des3_context *ctx,
     {
         unsigned char key_buf[24 + 4], *key_buf_aligned;
         unsigned char iv_buf[8 + 4], *iv_buf_aligned, iv_tmp[8];
-        unsigned char *output_buf, *output_buf_aligned;
         size_t length_done = 0;
 
         if(length % 8)
@@ -878,14 +867,8 @@ int des3_crypt_cbc( des3_context *ctx,
         {
             key_buf_aligned = (unsigned char *) (((unsigned int) key_buf + 4) / 4 * 4);
             iv_buf_aligned = (unsigned char *) (((unsigned int) iv_buf + 4) / 4 * 4);
-            output_buf = polarssl_malloc(length + 4);
 
-            if(output_buf == NULL)
-                return -1;
-
-            output_buf_aligned = (unsigned char *) (((unsigned int) output_buf + 4) / 4 * 4);
             memcpy(iv_buf_aligned, iv, 8);
-            memset(output_buf, 0, length + 4);
 
             if(mode == DES_DECRYPT)
             {
@@ -895,13 +878,13 @@ int des3_crypt_cbc( des3_context *ctx,
                 while((length - length_done) > RTL_CRYPTO_FRAGMENT)
                 {
                     memcpy(iv_tmp, (input + length_done + RTL_CRYPTO_FRAGMENT - 8), 8);
-                    rom_ssl_ram_map.hw_crypto_3des_cbc_decrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output_buf_aligned + length_done);
+                    rom_ssl_ram_map.hw_crypto_3des_cbc_decrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output + length_done);
                     memcpy(iv_buf_aligned, iv_tmp, 8);
                     length_done += RTL_CRYPTO_FRAGMENT;
                 }
 
                 memcpy(iv_tmp, (input + length - 8), 8);
-                rom_ssl_ram_map.hw_crypto_3des_cbc_decrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output_buf_aligned + length_done);
+                rom_ssl_ram_map.hw_crypto_3des_cbc_decrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output + length_done);
                 memcpy(iv, iv_tmp, 8);
             }
             else
@@ -911,17 +894,14 @@ int des3_crypt_cbc( des3_context *ctx,
 
                 while((length - length_done) > RTL_CRYPTO_FRAGMENT)
                 {
-                    rom_ssl_ram_map.hw_crypto_3des_cbc_encrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output_buf_aligned + length_done);
-                    memcpy(iv_buf_aligned, (output_buf_aligned + length_done + RTL_CRYPTO_FRAGMENT - 8), 8);
+                    rom_ssl_ram_map.hw_crypto_3des_cbc_encrypt(input + length_done, RTL_CRYPTO_FRAGMENT, iv_buf_aligned, 8, output + length_done);
+                    memcpy(iv_buf_aligned, (output + length_done + RTL_CRYPTO_FRAGMENT - 8), 8);
                     length_done += RTL_CRYPTO_FRAGMENT;
                 }
 
-                rom_ssl_ram_map.hw_crypto_3des_cbc_encrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output_buf_aligned + length_done);
-                memcpy(iv, (output_buf_aligned + length - 8), 8);
+                rom_ssl_ram_map.hw_crypto_3des_cbc_encrypt(input + length_done, length - length_done, iv_buf_aligned, 8, output + length_done);
+                memcpy(iv, (output + length - 8), 8);
             }
-
-            memcpy(output, output_buf_aligned, length);
-            polarssl_free(output_buf);
         }
 
         return 0;

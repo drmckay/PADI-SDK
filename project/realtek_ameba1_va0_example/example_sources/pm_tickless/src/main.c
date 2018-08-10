@@ -14,7 +14,7 @@
 
 #define LOGUART_RX_WAKE PC_1
 
-#define WAKELOCK_EXAMPLE WAKELOCK_USER_BASE
+#define PMU_USER_DEVICE  PMU_DEV_USER_BASE
 
 serial_t mysobj;
 volatile char rc = 0;
@@ -29,7 +29,7 @@ void uart_irq_callback(uint32_t id, SerialIrq event)
 	serial_t *sobj = (void*)id;
 
 	if(event == RxIrq) {
-		acquire_wakelock(WAKELOCK_EXAMPLE);
+		pmu_acquire_wakelock(BIT(PMU_USER_DEVICE));
 
 		rc = serial_getc(sobj);
 
@@ -52,7 +52,7 @@ void uart_irq_callback(uint32_t id, SerialIrq event)
 
 				// release wakelock and reset buf
 				cmdbuf_index = 0;
-				release_wakelock(WAKELOCK_EXAMPLE);
+				pmu_release_wakelock(BIT(PMU_USER_DEVICE));
 			}
 		}
 
@@ -68,15 +68,15 @@ void uart_irq_callback(uint32_t id, SerialIrq event)
 
 void gpio_uart_rx_irq_callback(uint32_t id, gpio_irq_event event)
 {
-	acquire_wakelock(WAKELOCK_EXAMPLE);
+	pmu_acquire_wakelock(BIT(PMU_USER_DEVICE));
 }
 
-void pre_sleep_process_callback(unsigned int expected_idle_time)
+void pre_sleep_process_callback(unsigned int expected_idle_time, void* param_ptr)
 {
 	// For peripherals that need turned off before sleep, call disable or deinit peripheral here
 }
 
-void post_sleep_process_callback(unsigned int expected_idle_time)
+void post_sleep_process_callback(unsigned int expected_idle_time, void* param_ptr)
 {
 	// For peripherals that are turned off before sleep, call enable or init peripheral here
 }
@@ -101,10 +101,10 @@ void config_uart()
 
 void gpio_loguart_rx_irq_callback (uint32_t id, gpio_irq_event event)
 {
-	/*  WAKELOCK_LOGUART is also handled in log service.
+	/*  PMU_LOGUART_DEVICE is also handled in log service.
 	 *  It is release after a complete command is sent.
 	 **/
-	acquire_wakelock(WAKELOCK_LOGUART);
+	pmu_acquire_wakelock(BIT(PMU_LOGUART_DEVICE));
 }
 
 void config_loguart()
@@ -146,13 +146,12 @@ void main(void)
 	// setup log uart with capability of wakeup system
 	config_loguart();
 
-	// By default tickless is disabled because WAKELOCK_OS is locked.
+	// By default tickless is disabled because PMU_OS is locked.
 	// Release this wakelock to enable tickless
-	release_wakelock(WAKELOCK_OS);
+	pmu_release_wakelock(BIT(PMU_OS));
 
 	// Register pre/post sleep callback. They are called when system automatically enter/leave sleep.
-	register_sleep_callback_by_module(1, pre_sleep_process_callback, WAKELOCK_EXAMPLE);
-	register_sleep_callback_by_module(0, post_sleep_process_callback, WAKELOCK_EXAMPLE);
+	pmu_register_sleep_callback(BIT(PMU_USER_DEVICE), pre_sleep_process_callback, NULL, post_sleep_process_callback, NULL);
 
 	/* Execute application example */
 	example_entry();

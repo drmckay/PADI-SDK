@@ -50,6 +50,10 @@ extern void lwip_PRE_SLEEP_PROCESSING(void);
 extern void lwip_POST_SLEEP_PROCESSING(void);
 #endif //CONFIG_LWIP_LAYER == 1
 
+#ifdef CONFIG_WOWLAN
+extern unsigned char *rltk_wlan_get_ip(int idx);
+#endif
+
 #ifdef	__cplusplus
 }
 #endif

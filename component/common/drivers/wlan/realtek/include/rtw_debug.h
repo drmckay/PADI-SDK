@@ -151,6 +151,8 @@
 extern void rtl871x_cedbg(const char *fmt, ...);
 #endif
 
+extern u32 GlobalDebugEnable;
+
 #define RT_TRACE(_Comp, _Level, Fmt) do{}while(0)
 #define _func_enter_ do{}while(0)
 #define _func_exit_ do{}while(0)
@@ -166,6 +168,11 @@ extern void rtl871x_cedbg(const char *fmt, ...);
 	#define MSG_8192C(x, ...) do {} while(0)
 	#define DBG_8192C(x,...) do {} while(0)
 	#define DBG_871X_LEVEL(x,...) do {} while(0)
+#endif
+
+#ifdef CONFIG_BT_COEXIST
+	#define RTW_INFO(x,...) do {} while (0)
+	#define RTW_DBG_DUMP(_TitleString, _HexData, _HexDataLen) do {} while (0)
 #endif
 
 #undef	_dbgdump
@@ -194,23 +201,28 @@ extern void rtl871x_cedbg(const char *fmt, ...);
 #define DEBUG_LEVEL	(_drv_err_)
 #if 	defined (_dbgdump)
 	#undef DBG_871X_LEVEL
-#if defined (__ICCARM__) || defined (__CC_ARM) || defined(CONFIG_PLATFORM_8195A) || defined(CONFIG_PLATFORM_8711B)
+#if defined (__ICCARM__) || defined (__CC_ARM) ||defined(__GNUC__)|| defined(CONFIG_PLATFORM_8195A) || defined(CONFIG_PLATFORM_8711B)
 	#define DBG_871X_LEVEL(level, ...)     \
 	do {\
-		_dbgdump(DRIVER_PREFIX __VA_ARGS__);\
+             if(GlobalDebugEnable){\
+			_dbgdump(DRIVER_PREFIX __VA_ARGS__);\
+		}\
 	}while(0)
 #else
 	#define DBG_871X_LEVEL(level, fmt, arg...)     \
 	do {\
-		if (level <= DEBUG_LEVEL) {\
-			if (level <= _drv_err_ && level > _drv_always_) {\
-				_dbgdump(DRIVER_PREFIX"ERROR " fmt, ##arg);\
-			} \
-			else {\
-				_dbgdump(DRIVER_PREFIX fmt, ##arg);\
-			} \
+		if(GlobalDebugEnable){\
+			if (level <= DEBUG_LEVEL) {\
+				if (level <= _drv_err_ && level > _drv_always_) {\
+					_dbgdump(DRIVER_PREFIX"ERROR " fmt, ##arg);\
+				} \
+				else {\
+					_dbgdump(DRIVER_PREFIX fmt, ##arg);\
+				} \
+			}\
 		}\
 	}while(0)
+
 #endif	//#ifdef __CC_ARM
 #endif
 

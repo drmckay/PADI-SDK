@@ -27,7 +27,7 @@
 #include <platform/platform_stdlib.h>
 #include "platform_opts.h"
 #define WIFI_LOGO_CERTIFICATION_CONFIG 0    //for ping 10k test buffer setting
-    
+
 /**
  * SYS_LIGHTWEIGHT_PROT==1: if you want inter-task protection for certain
  * critical regions during buffer allocation, deallocation and memory
@@ -50,6 +50,10 @@
  */
 #define NO_SYS                  0
 
+#ifndef CONFIG_DYNAMIC_TICKLESS
+#define CONFIG_DYNAMIC_TICKLESS 0
+#endif
+
 /* ---------- Memory options ---------- */
 /* MEM_ALIGNMENT: should be set to the alignment of the CPU for which
    lwIP is compiled. 4 byte alignment -> define MEM_ALIGNMENT to 4, 2
@@ -60,6 +64,8 @@
 a lot of data that needs to be copied, this should be set high. */
 #if WIFI_LOGO_CERTIFICATION_CONFIG
     #define MEM_SIZE                (10*1024) //for ping 10k test
+#elif CONFIG_ETHERNET
+	#define MEM_SIZE				(6*1024)  //for iperf test
 #else
     #define MEM_SIZE                (5*1024)
 #endif
@@ -152,6 +158,7 @@ a lot of data that needs to be copied, this should be set high. */
 /* Support Multicast */
 #define LWIP_IGMP                   1
 #define LWIP_RAND()                 rand()
+#define LWIP_SRAND()                srand(sys_now())
 
 /* Support TCP Keepalive */
 #define LWIP_TCP_KEEPALIVE				1
@@ -160,7 +167,7 @@ a lot of data that needs to be copied, this should be set high. */
    because some GAGENT functions denpond on the following macro definitions.*/
 #define LWIP_UART_ADAPTER                   0
 
-#if LWIP_UART_ADAPTER
+#if LWIP_UART_ADAPTER || CONFIG_ETHERNET
 #undef  LWIP_SO_SNDTIMEO        
 #define LWIP_SO_SNDTIMEO                		1
 
@@ -178,12 +185,15 @@ a lot of data that needs to be copied, this should be set high. */
 #define TCP_KEEPCNT_DEFAULT			10U
 #endif
 
-#if CONFIG_EXAMPLE_UART_ATCMD
+#if CONFIG_EXAMPLE_UART_ATCMD || CONFIG_EXAMPLE_SPI_ATCMD 
 #undef  LWIP_SO_SNDTIMEO        
 #define LWIP_SO_SNDTIMEO                		1
 
 #undef  SO_REUSE        
 #define SO_REUSE                        			1
+
+#undef SO_REUSE_RXTOALL
+#define SO_REUSE_RXTOALL				1
 
 #undef MEMP_NUM_NETCONN                	
 #define MEMP_NUM_NETCONN                	10
@@ -202,6 +212,7 @@ a lot of data that needs to be copied, this should be set high. */
 #define TCP_KEEPCNT_DEFAULT			10U
 
 #define ERRNO   1
+
 #endif
 
 /* ---------- Statistics options ---------- */
@@ -297,7 +308,10 @@ The STM32F2x7 allows computing and verifying the IP, UDP, TCP and ICMP checksums
 #define DEFAULT_THREAD_STACKSIZE        500
 #define TCPIP_THREAD_PRIO               (configMAX_PRIORITIES - 2)
 
-
+/* Added by Realtek */
+#ifndef DNS_IGNORE_REPLY_ERR
+#define DNS_IGNORE_REPLY_ERR   1
+#endif /* DNS_IGNORE_REPLY_ERR */
 
 #endif /* __LWIPOPTS_H__ */
 

@@ -124,13 +124,7 @@ extern uint32_t SystemCoreClock;
 #endif
 
 #define configTIMER_TASK_PRIORITY       ( 1 )
-
-#ifdef CONFIG_UVC
-#define configTIMER_QUEUE_LENGTH        ( 20 )
-#else
 #define configTIMER_QUEUE_LENGTH        ( 10 )
-#endif
-
 #define configTIMER_TASK_STACK_DEPTH    ( 512 )     //USE_MIN_STACK_SIZE modify from 512 to 256
 
 #if (__IASMARM__ != 1)

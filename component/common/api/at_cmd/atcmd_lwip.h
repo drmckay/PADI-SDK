@@ -2,6 +2,7 @@
 #define __ATCMD_LWIP_H__
 
 #include "main.h"
+#include "osdep_service.h"
 #include <lwip/opt.h>
 #include "lwip/sockets.h"
 #include "lwip/api.h"
@@ -30,6 +31,7 @@
 
 #define NODE_MODE_TCP		0
 #define NODE_MODE_UDP		1
+#define NODE_MODE_SSL		2
 
 #define NODE_ROLE_SERVER	0
 #define NODE_ROLE_CLIENT	1
@@ -45,6 +47,10 @@
 #define ATCMD_LWIP_TASK_PRIORITY        (tskIDLE_PRIORITY + 1)
 
 #if ATCMD_VER == ATVER_2 
+
+#ifndef ATCMD_SUPPORT_SSL
+#define ATCMD_SUPPORT_SSL 0
+#endif
 
 #define SERVER "127.0.0.1"
 
@@ -70,10 +76,13 @@ typedef struct ns
 	xTaskHandle handletask;
 	struct ns* next;
 	struct ns* nextseed;
+#if (ATCMD_VER == ATVER_2) && ATCMD_SUPPORT_SSL
+	void *context;
+#endif
 } node;
 
 extern xTaskHandle atcmd_lwip_tt_task;
-extern xSemaphoreHandle atcmd_lwip_tt_sema;
+extern _sema atcmd_lwip_tt_sema;
 extern volatile int atcmd_lwip_tt_datasize;
 extern volatile int atcmd_lwip_tt_lasttickcnt;
 #define ATCMD_LWIP_TT_MAX_DELAY_TIME_MS	(20) //transparent transmission interval

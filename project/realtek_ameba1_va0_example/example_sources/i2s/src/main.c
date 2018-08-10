@@ -10,7 +10,7 @@
   * @param  None
   * @retval None
   */
-#include "alc5651.c"
+#include "alc5651.h"
 /*
 extern void alc5651_init(void);
 extern void alc5651_init_interface2(void);
@@ -46,11 +46,11 @@ u8 i2s_rx_buf[I2S_DMA_PAGE_SIZE*I2S_DMA_PAGE_NUM];
 		#undef SAMPLE_FILE_RATE
 		#define SAMPLE_FILE_RATE SR_8KHZ
 	#endif
-#elif SAMPLE_FILE_RATE==11025
+#elif SAMPLE_FILE_RATE==14700
 	#if SAMPLE_FILE_CHNUM==2
-		#include "birds_11025_2ch_16b.c"
+		#include "birds_14700_2ch_16b.c"
 		#undef SAMPLE_FILE_RATE
-		#define SAMPLE_FILE_RATE SR_11p02KHZ
+		#define SAMPLE_FILE_RATE SR_14p7KHZ
 	#endif
 #elif SAMPLE_FILE_RATE==16000
 	#if SAMPLE_FILE_CHNUM==2
@@ -163,7 +163,7 @@ int test_rate_list[12] = {
     SR_48KHZ,
 	SR_96KHZ,
 	SR_7p35KHZ,
-	SR_11p02KHZ,
+	SR_14p7KHZ,
 	SR_22p05KHZ,
 	SR_29p4KHZ,
 	SR_44p1KHZ,
@@ -322,5 +322,10 @@ void main(void)
 #endif
 	
 	
-	while(1);
+	while(1){
+		asm volatile ("nop\n\t");//If run in non-os environment,it needs to add nop operation
+		asm volatile ("nop\n\t");
+		asm volatile ("nop\n\t");
+		asm volatile ("nop\n\t");
+	}
 }

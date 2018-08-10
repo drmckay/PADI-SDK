@@ -92,6 +92,8 @@
 /* Private define ------------------------------------------------------------*/
 #define MAX_DHCP_TRIES 5
 
+
+
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
 
@@ -115,6 +117,7 @@ void LwIP_Init(void)
 	struct ip_addr netmask;
 	struct ip_addr gw;
 	int8_t idx = 0;
+
 	/* Create tcp_ip stack thread */
 	tcpip_init( NULL, NULL );	
 
@@ -131,7 +134,7 @@ void LwIP_Init(void)
 	The init function pointer must point to a initialization function for
 	your ethernet netif interface. The following code illustrates it's use.*/
 	//printf("NET_IF_NUM:%d\n\r",NET_IF_NUM);
-	for(idx=NET_IF_NUM - 1;idx>=0;idx--){
+	for(idx=0;idx<NET_IF_NUM;idx++){
 		if(idx==0){
 			IP4_ADDR(&ipaddr, IP_ADDR0, IP_ADDR1, IP_ADDR2, IP_ADDR3);
 			IP4_ADDR(&netmask, NETMASK_ADDR0, NETMASK_ADDR1 , NETMASK_ADDR2, NETMASK_ADDR3);
@@ -167,11 +170,14 @@ void LwIP_Init(void)
 	
 	/*  Registers the default network interface. */
 	netif_set_default(&xnetif[0]);
-	
+
+	/*move these operations to wifi_on/wifi_off*/
+	#if 0
 	/*  When the netif is fully configured this function must be called.*/
 	for(idx = 0;idx < NET_IF_NUM;idx++)
 		netif_set_up(&xnetif[idx]); 
-	
+	#endif
+
 	lwip_init_done = 1;	 
 }
 
@@ -223,6 +229,17 @@ uint8_t LwIP_DHCP(uint8_t idx, uint8_t dhcp_state)
 
 		case DHCP_WAIT_ADDRESS:
 		{
+			/* If DHCP stopped by wifi_disconn_hdl*/
+			if(pnetif->dhcp->state == 0) 
+			{
+                                IP4_ADDR(&ipaddr, IP_ADDR0 ,IP_ADDR1 , IP_ADDR2 , IP_ADDR3 );
+                                IP4_ADDR(&netmask, NETMASK_ADDR0, NETMASK_ADDR1, NETMASK_ADDR2, NETMASK_ADDR3);
+                                IP4_ADDR(&gw, GW_ADDR0, GW_ADDR1, GW_ADDR2, GW_ADDR3);
+                                netif_set_addr(pnetif, &ipaddr , &netmask, &gw);
+                                printf("\n\rLwIP_DHCP: dhcp stop.");
+				return DHCP_STOP;
+			}
+			
 			/* Read the new IP address */
 			IPaddress = pnetif->ip_addr.addr;
 
@@ -271,6 +288,11 @@ uint8_t LwIP_DHCP(uint8_t idx, uint8_t dhcp_state)
 #if CONFIG_WLAN
 					error_flag = RTW_DHCP_FAIL;
 #endif
+
+#if CONFIG_ETHERNET
+                    if(idx == NET_IF_NUM -1) // This is the ethernet interface, set it up for static ip address
+                       netif_set_up(pnetif);
+#endif
 					return DHCP_TIMEOUT;
 				}else
 				{
@@ -306,6 +328,20 @@ uint8_t LwIP_DHCP(uint8_t idx, uint8_t dhcp_state)
 	}
 
 	}   
+}
+
+void LwIP_ReleaseIP(uint8_t idx)
+{
+	struct ip_addr ipaddr;
+	struct ip_addr netmask;
+	struct ip_addr gw;
+	struct netif *pnetif = &xnetif[idx];
+	
+	IP4_ADDR(&ipaddr, 0, 0, 0, 0);
+	IP4_ADDR(&netmask, 255, 255, 255, 0);
+	IP4_ADDR(&gw, 0, 0, 0, 0);
+	
+	netif_set_addr(pnetif, &ipaddr , &netmask, &gw);
 }
 
 uint8_t* LwIP_GetMAC(struct netif *pnetif)

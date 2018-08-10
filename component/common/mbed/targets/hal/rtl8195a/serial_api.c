@@ -477,6 +477,16 @@ void serial_set_flow_control(serial_t *obj, FlowControl type, PinName rxflow, Pi
     HalRuartFlowCtrl((VOID *)pHalRuartAdapter);
 }
 
+void serial_rts_control(serial_t *obj, BOOLEAN rts_state)
+{
+    PHAL_RUART_ADAPTER pHalRuartAdapter;
+
+    pHalRuartAdapter = &(obj->hal_uart_adp);
+    pHalRuartAdapter->RTSCtrl = !rts_state;
+    // RTS_Pin = AFE ? (~rts | RX_FIFO_Level_Over) : ~rts;
+    HalRuartRTSCtrlRtl8195a(pHalRuartAdapter, pHalRuartAdapter->RTSCtrl);    
+}
+
 // Blocked(busy wait) receive, return received bytes count
 int32_t serial_recv_blocked (serial_t *obj, char *prxbuf, uint32_t len, uint32_t timeout_ms)
 {
@@ -771,7 +781,7 @@ uint8_t serial_raed_lsr(serial_t *obj)
 // Bit 5: Complement of the DSR input 
 // Bit 6: Complement of the RI input 
 // Bit 7: Complement of the DCD input 
-uint8_t serial_raed_msr(serial_t *obj) 
+uint8_t serial_read_msr(serial_t *obj) 
 {
     PHAL_RUART_ADAPTER pHalRuartAdapter;
     uint8_t RegValue;

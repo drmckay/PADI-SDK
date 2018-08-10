@@ -10,7 +10,7 @@ for /f "usebackq" %%i in (`hostname`) do set hostname=%%i
 
 echo #define UTS_VERSION "%date:~0,10%-%time:~0,8%" > ..\inc\build_info.h
 echo #define RTL8195AFW_COMPILE_TIME "%date:~0,10%-%time:~0,8%" >> ..\inc\build_info.h
-echo #define RTL8195AFW_COMPILE_DATE "%date:~0,4%%date:~5,2%%date:~8,2%" >> ..\inc\build_info.h
+echo #define RTL8195AFW_COMPILE_DATE "%date:~0,10%" >> ..\inc\build_info.h
 echo #define RTL8195AFW_COMPILE_BY "%USERNAME%" >> ..\inc\build_info.h
 echo #define RTL8195AFW_COMPILE_HOST "%hostname%" >> ..\inc\build_info.h
 echo #define RTL8195AFW_COMPILE_DOMAIN >> ..\inc\build_info.h

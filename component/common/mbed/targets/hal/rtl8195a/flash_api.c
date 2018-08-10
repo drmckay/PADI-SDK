@@ -79,6 +79,79 @@ void flash_init(flash_t *obj)
     //DBG_8195A("Flash ID is = %x %x %x \n",SpicInitParaAllClk[0][0].id[0],SpicInitParaAllClk[0][0].id[1],SpicInitParaAllClk[0][0].id[2]);
 
 }
+
+/**
+  * @brief  Get flash ID (command: 0x9F). 
+  * @param  obj: Flash object define in application software.
+  * @param  buf: Pointer to a byte array to save the readback ID.
+  * @param  len: Specifies the length of the buf. It should be 3.
+  * @retval -1: Fail.
+  */
+int flash_read_id(flash_t *obj, uint8_t *buf, uint8_t len)
+{
+    int index = 0;
+    
+    flash_turnon();
+
+    if(isinit == 0)
+        flash_init(&flashobj);
+
+    if (len < 3) {
+        DBG_8195A("ID length should be >= 3\n");
+        return -1;
+    }
+    SpicReadIDRtl8195A();
+
+    for (index = 0; index < 3; index++) {
+        buf[index] = SpicInitParaAllClk[0][0].id[index];
+    }
+
+    if ((buf[0] == 0x0) || (buf[0] == 0xFF)) {
+        DBG_8195A("Invalid ID\n");
+        return -1;
+    }
+    
+    len = 3;
+    return len;   
+}
+
+/**
+  * @brief  This function is only for Winbond flash to get unique ID (command: 0x4B).
+  * @param  obj: Flash object define in application software.
+  * @param  buf: Pointer to a byte array to save the readback unique ID.
+  * @param  len: Specifies the length of the buf. It should be 8.
+  * @retval -1: Fail.
+  */
+int flash_read_unique_id(flash_t *obj, uint8_t *buf, uint8_t len)
+{
+    int index = 0;
+    
+    flash_turnon();
+
+    if(isinit == 0)
+        flash_init(&flashobj);
+
+    if (len < 8) {
+        DBG_8195A("Unique ID length should be >= 8.\n");
+        return -1;
+    }
+
+    if (FLASH_WINBOND != flashobj.SpicInitPara.flashtype) {
+        DBG_8195A("Only Winbond flash supports this function.\n");
+        return -1;        
+    }
+
+    SpicReadUniqueIDRtl8195A(buf, len);
+    
+    //for (index = 0; index < len; index++) {
+        //DBG_8195A("buf[%d] = %x\n",index,buf[index]);
+    //}
+
+    len = 8;
+    return len;
+
+}
+
 void flash_turnon()
 {
     SPI_FLASH_PIN_FCTRL(ON);  

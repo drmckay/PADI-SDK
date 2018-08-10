@@ -772,9 +772,10 @@ _UartTxDmaIrqHandle_Patch(
     pHalGdmaAdapter = (PHAL_GDMA_ADAPTER)pUartGdmaConfig->pTxHalGdmaAdapter;
     pHalGdmaOp = (PHAL_GDMA_OP)pUartGdmaConfig->pHalGdmaOp;
 
+    HalRuartTxGdmaDisable8195a(pHalRuartAdapter);
+
     // Clear Pending ISR
     IsrTypeMap = pHalGdmaOp->HalGdmaChIsrClean((VOID*)pHalGdmaAdapter);
-    
     if (IsrTypeMap & BlockType) {   
         pHalGdmaAdapter->MuliBlockCunt++;       
     }
@@ -818,6 +819,8 @@ _UartRxDmaIrqHandle_Patch(
     pUartGdmaConfig = pHalRuartAdapter->DmaConfig;
     pHalGdmaAdapter = (PHAL_GDMA_ADAPTER)pUartGdmaConfig->pRxHalGdmaAdapter;
     pHalGdmaOp = (PHAL_GDMA_OP)pUartGdmaConfig->pHalGdmaOp;
+
+    HalRuartRxGdmaDisable8195a (pHalRuartAdapter);
 
     // Clear Pending ISR
     IsrTypeMap = pHalGdmaOp->HalGdmaChIsrClean((VOID*)pHalGdmaAdapter);
@@ -1283,6 +1286,7 @@ HalRuartStopRecvRtl8195a_Patch(
 
         if ((NULL != pHalGdmaAdapter) && (NULL != pHalGdmaOp) && 
             (HalGdmaQueryChEnRtl8195a((VOID*)pHalGdmaAdapter))) {
+            HalRuartRxGdmaDisable8195a (pHalRuartAdapter);
             // Clean Auto Reload Bit
             pHalGdmaOp->HalGdmaChCleanAutoDst((VOID*)pHalGdmaAdapter);
             // Clear Pending ISR
@@ -1358,6 +1362,7 @@ HalRuartStopSendRtl8195a_Patch(
 
         if ((NULL != pHalGdmaAdapter) && (NULL != pHalGdmaOp) && 
             (HalGdmaQueryChEnRtl8195a((VOID*)pHalGdmaAdapter))) {
+            HalRuartTxGdmaDisable8195a(pHalRuartAdapter);
             // Clean Auto Reload Bit
             pHalGdmaOp->HalGdmaChCleanAutoDst((VOID*)pHalGdmaAdapter);
             // Clear Pending ISR
@@ -1471,3 +1476,76 @@ HalRuartDumpRegRtl8195a(
     RegValue &= ~(RUART_LINE_CTL_REG_DLAB_ENABLE);
     HAL_RUART_WRITE32(UartIndex, RUART_LINE_CTL_REG_OFF, RegValue);
 }
+
+/**
+ *
+ * To Enable the UART TX GDMA
+ *
+ */
+VOID
+HalRuartTxGdmaEnable8195a(
+    IN VOID *Data
+)
+{
+    PHAL_RUART_ADAPTER pHalRuartAdapter = (PHAL_RUART_ADAPTER) Data;
+    u32 RegValue;
+    
+    RegValue = HAL_RUART_READ32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF);
+    RegValue |= (RUART_TXDMA_EN_MASK);
+    HAL_RUART_WRITE32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF, RegValue);
+}
+
+/**
+ *
+ * To Disable the UART TX GDMA
+ *
+ */
+VOID
+HalRuartTxGdmaDisable8195a(
+    IN VOID *Data
+)
+{
+    PHAL_RUART_ADAPTER pHalRuartAdapter = (PHAL_RUART_ADAPTER) Data;
+    u32 RegValue;
+    
+    RegValue = HAL_RUART_READ32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF);
+    RegValue &= ~(RUART_TXDMA_EN_MASK);
+    HAL_RUART_WRITE32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF, RegValue);
+}
+
+/**
+ *
+ * To Enable the UART RX GDMA
+ *
+ */
+VOID
+HalRuartRxGdmaEnable8195a(
+    IN VOID *Data
+)
+{
+    PHAL_RUART_ADAPTER pHalRuartAdapter = (PHAL_RUART_ADAPTER) Data;
+    u32 RegValue;
+    
+    RegValue = HAL_RUART_READ32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF);
+    RegValue |= (RUART_RXDMA_EN_MASK);
+    HAL_RUART_WRITE32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF, RegValue);
+}
+
+/**
+ *
+ * To Disable the UART TX GDMA
+ *
+ */
+VOID
+HalRuartRxGdmaDisable8195a(
+    IN VOID *Data
+)
+{
+    PHAL_RUART_ADAPTER pHalRuartAdapter = (PHAL_RUART_ADAPTER) Data;
+    u32 RegValue;
+    
+    RegValue = HAL_RUART_READ32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF);
+    RegValue &= ~(RUART_RXDMA_EN_MASK);
+    HAL_RUART_WRITE32(pHalRuartAdapter->UartIndex, RUART_MISC_CTL_REG_OFF, RegValue);
+}
+

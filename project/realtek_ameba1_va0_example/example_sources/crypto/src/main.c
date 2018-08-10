@@ -14,6 +14,7 @@
 #include "main.h"
 #include "diag.h"
 #include <polarssl/aes.h>
+#include "device_lock.h"
 
 #define STACKSIZE                   2048
 
@@ -114,8 +115,14 @@ void test_md5(void)
 
 	DiagPrintf("MD5 test\r\n"); 
 	
+	// Use mutex lock to protect HW crypto engine from multiple access concurrently.
+	device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+
 	ret = rtl_crypto_md5(plaintext, strlen(plaintext), (unsigned char *)&digest); // the length of MD5's digest is 16 bytes. 
 
+	// Release mutex lock when left critical section.
+	device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+	
 	if ( rtl_memcmpb(digest, md5_digest, 16) == 0 ) {
 		DiagPrintf("MD5 test result is correct, ret=%d\r\n", ret);
 	} else {
@@ -125,7 +132,15 @@ void test_md5(void)
 	for( i = 0; i < 16; i++ )
 	{	
 		DiagPrintf( "  MD5 test #%d: ", i + 1 );
+		
+		// Use mutex lock to protect HW crypto engine from multiple access concurrently.
+		device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+		
 		ret = rtl_crypto_md5(md5_test_buf[i], md5_test_buflen[i], md5sum); // the length of MD5's digest is 16 bytes.
+		
+		// Release mutex lock when left critical section.
+		device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+		
 		DiagPrintf(" MD5 ret=%d\n", ret);
 		if( rtl_memcmpb( md5sum, md5_test_sum[i], 16 ) != 0 )
 		{
@@ -237,12 +252,12 @@ static const unsigned char aes_test_ecb_res_128[160] =
  */
 int test_aes_cbc(void)
 {
-    const u8 *key, *pIv;
+	const u8 *key, *pIv;
 	u32 keylen= 0;
 	u32 ivlen = 0;
-    u8 *message;
+	u8 *message;
 	u32 msglen; 
-    u8 *pResult;
+	u8 *pResult;
 
 	int ret;
 
@@ -257,6 +272,11 @@ int test_aes_cbc(void)
         
 	message = (unsigned char *)aes_test_buf;	
 	msglen = sizeof(aes_test_buf);
+	
+	// Use mutex lock to protect HW crypto engine from multiple access concurrently.
+	// The critical section for encrypt/decrypt should include init function.
+	device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+	
 	ret = rtl_crypto_aes_cbc_init(key,keylen);
 	if ( ret != 0 ) {
 		DiagPrintf("AES CBC init failed\r\n");
@@ -277,6 +297,10 @@ int test_aes_cbc(void)
 	message = pResult;
 	
 	ret = rtl_crypto_aes_cbc_decrypt(message, msglen, pIv, ivlen, pResult);
+	
+	// Release mutex lock when left critical section.
+	device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+	
 	if ( ret != 0 ) {
 		DiagPrintf("AES CBC decrypt failed, ret=%d\r\n", ret);
 		return ret;
@@ -299,110 +323,145 @@ int test_aes_cbc(void)
  */
 int test_aes_ecb(void)
 {
-    
-  const u8 *key, *pIv;
-        u32 keylen= 0;
-        u32 ivlen = 0;
-    u8 *message;
-        u32 msglen; 
-    u8 *pResult;
+	const u8 *key, *pIv;
+	u32 keylen= 0;
+	u32 ivlen = 0;
+	u8 *message;
+	u32 msglen; 
+	u8 *pResult;
  
-        int ret;
+	int ret;
  
-        DiagPrintf("AES ECB test\r\n"); 
+	DiagPrintf("AES ECB test\r\n"); 
+
+	key = aes_test_key;
+	keylen = 16;
+	pIv = NULL;
+	ivlen = 0;
  
-        key = aes_test_key;
-        keylen = 16;
-        pIv = NULL;
-        ivlen = 0;
- 
-        pResult = cipher_result;            
-        message = (unsigned char *)aes_test_ecb_buf;      
-        msglen = sizeof(aes_test_buf);
-        //for(int i=0;i<msglen;i++)
-        //printf("\r\n first message[%d] = %p,",i,message[i]);
-        ret = rtl_crypto_aes_ecb_init(key,keylen);
-        if ( ret != 0 ) {
-                DiagPrintf("AES ECB init failed\r\n");
-                return ret;
-        }
-        
-        ret = rtl_crypto_aes_ecb_encrypt(message, msglen, pIv, ivlen, pResult);
-        if ( ret != 0 ) {
-                DiagPrintf("AES ECB encrypt failed\r\n");
-                return ret;
-        }
- 
-        if ( rtl_memcmpb(aes_test_ecb_res_128, pResult, msglen) == 0 ) 
-        {
-                DiagPrintf("AES ECB encrypt result success\r\n");  
-        } 
-        else {
-                DiagPrintf("AES ECB encrypt result failed\r\n");       
-        }
- 
-        message = pResult;
-        //for(int i=0;i<msglen;i++)
-        //printf("\r\n second message[%d] = %p,",i,message[i]);
-        ret = rtl_crypto_aes_ecb_decrypt(message, msglen, pIv, ivlen, pResult);
-        if ( ret != 0 ) {
-                DiagPrintf("AES ECB decrypt failed, ret=%d\r\n", ret);
-                return ret;
-        }
- 
-        if ( rtl_memcmpb(aes_test_ecb_buf, pResult, msglen) == 0 ) 
-        {
-                DiagPrintf("AES ECB decrypt result success\r\n");
-        } 
-        else {
-                DiagPrintf("AES ECB decrypt result failed\r\n");       
-        }
- 
-        //for(int i=0;i<msglen;i++)
-        //printf("\r\n last message[%d] = %p,",i,message[i]);
-        return 0;
+	pResult = cipher_result;            
+	message = (unsigned char *)aes_test_ecb_buf;      
+	msglen = sizeof(aes_test_buf);
+	//for(int i=0;i<msglen;i++)
+	//printf("\r\n first message[%d] = %p,",i,message[i]);
+	
+	// Use mutex lock to protect HW crypto engine from multiple access concurrently.
+	// The critical section for encrypt/decrypt should include init function.
+	device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+	
+	ret = rtl_crypto_aes_ecb_init(key,keylen);
+	if ( ret != 0 ) {
+		DiagPrintf("AES ECB init failed\r\n");
+		return ret;
+	}
+
+	ret = rtl_crypto_aes_ecb_encrypt(message, msglen, pIv, ivlen, pResult);
+	if ( ret != 0 ) {
+		DiagPrintf("AES ECB encrypt failed\r\n");
+		return ret;
+	}
+
+	if ( rtl_memcmpb(aes_test_ecb_res_128, pResult, msglen) == 0 ) 
+	{
+		DiagPrintf("AES ECB encrypt result success\r\n");  
+	} 
+	else {
+		DiagPrintf("AES ECB encrypt result failed\r\n");       
+	}
+
+	message = pResult;
+	//for(int i=0;i<msglen;i++)
+	//printf("\r\n second message[%d] = %p,",i,message[i]);
+	ret = rtl_crypto_aes_ecb_decrypt(message, msglen, pIv, ivlen, pResult);
+
+	// Release mutex lock when left critical section.
+	device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+
+	if ( ret != 0 ) {
+		DiagPrintf("AES ECB decrypt failed, ret=%d\r\n", ret);
+		return ret;
+	}
+
+	if ( rtl_memcmpb(aes_test_ecb_buf, pResult, msglen) == 0 ) 
+	{
+		DiagPrintf("AES ECB decrypt result success\r\n");
+	} 
+	else {
+		DiagPrintf("AES ECB decrypt result failed\r\n");       
+	}
+
+	//for(int i=0;i<msglen;i++)
+	//printf("\r\n last message[%d] = %p,",i,message[i]);
+	return 0;
 }
 
+static void test_md5_thread(void *param){
+	test_md5();
+	vTaskDelete(NULL);
+}
 
+static void test_aes_cbc_thread(void *param){
+	test_aes_cbc();
+	vTaskDelete(NULL);
+}
 
+static void test_aes_ecb_thread(void *param){
+	test_aes_ecb();
+	vTaskDelete(NULL);
+}
 
 void main(void)
 {
-     // sample text
-    char rc;
+	// sample text
+	char rc;
 	//
 	int ret;
 	int loop=0;
-        u32 keylen= 0;
+	u32 keylen= 0;
 	u32 ivlen = 0;
-    u8 *pResult;
-    u8 *message;
-    u32 *ResultLen;
-    u32 msglen = 0;
-    const u8 *key, *pIv;
-    key = aes_test_key;
+	u8 *pResult;
+	u8 *message;
+	u32 *ResultLen;
+	u32 msglen = 0;
+	const u8 *key, *pIv;
+	key = aes_test_key;
 	keylen = 16;
 	pIv = aes_test_iv_1;
 	ivlen = 16;
-    //
-    message = (unsigned char *)aes_test_buf;	
-    msglen = sizeof(aes_test_buf);
+	//
+	message = (unsigned char *)aes_test_buf;	
+	msglen = sizeof(aes_test_buf);
 
-	
-    DiagPrintf("CRYPTO API Demo...\r\n");
+	DiagPrintf("CRYPTO API Demo...\r\n");
 
 	if ( rtl_cryptoEngine_init() != 0 ) {
 		DiagPrintf("crypto engine init failed\r\n");            
 	}	
-        else
-          printf("init success\n");
+	else
+		printf("init success\n");
        
         
-        pResult = test_result;	
-	test_md5();   
-	test_aes_cbc();
-        test_aes_ecb();
-        //aes_test();  //added api combined aes_cbc setkey and cryption into one function
-    
+	pResult = test_result;	
+//	test_md5();   
+//	test_aes_cbc();
+//	test_aes_ecb();
+	//aes_test();  //added api combined aes_cbc setkey and cryption into one function
+		
+	/* Note that it should be protected by device_mutex_lock() if using HW crypto */
+	if(xTaskCreate(test_md5_thread, "test_md5_thread", STACKSIZE, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS)
+		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
+	if(xTaskCreate(test_aes_cbc_thread, "test_aes_cbc_thread", STACKSIZE, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS)
+		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
+	if(xTaskCreate(test_aes_ecb_thread, "test_aes_ecb_thread", STACKSIZE, NULL, tskIDLE_PRIORITY + 1, NULL) != pdPASS)
+		printf("\n\r%s xTaskCreate failed", __FUNCTION__);
+
+	/* Enable Schedule, Start Kernel */
+#if defined(CONFIG_KERNEL) && !TASK_SCHEDULER_DISABLED
+	#ifdef PLATFORM_FREERTOS
+	vTaskStartScheduler();
+	#endif
+#else
+	RtlConsolTaskRom(NULL);
+#endif
 }
 

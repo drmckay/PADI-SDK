@@ -296,7 +296,7 @@ RtkDACIdxChk(
     if (DACIdx == DAC1_SEL)
         return _EXIT_FAILURE;
 #endif
-        
+    DACIdx = DACIdx;    
     return _EXIT_SUCCESS;
 }
 

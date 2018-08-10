@@ -42,7 +42,7 @@ void main(void)
 
     port_mode(&port0, PullNone);
     // Assign pins to this port 
-    port0.pin_def = (uint8_t*)My_Port_Def;
+    port0.pin_def = (uint8_t *)My_Port_Def;
     pin_mask = 0xFF;    // each bit map to 1 pin: 0: pin disable, 1: pin enable
     port_init(&port0, PortA, pin_mask, PIN_OUTPUT);
 

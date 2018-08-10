@@ -89,7 +89,7 @@
 
 #ifdef CONFIG_READ_FLASH
 
-#ifndef CONFIG_PLATFORM_8195A
+#ifndef CONFIG_PLATFORM_AMEBA_X
 
 #include <flash/stm32_flash.h>
 #if defined(STM32F2XX)
@@ -143,7 +143,7 @@
 #define webHTML_BODY_START \
 "</head>\
 <body  onLoad=\"onChangeSecType()\">\
-<form method=\"post\" onSubmit=\"return onSubmitForm()\" >\
+<form method=\"post\" onSubmit=\"return onSubmitForm()\" accept-charset=\"utf-8\">\
 <div class=\"wrapper\">\
 <div class=\"header\">\
 Realtek SoftAP Configuration\
@@ -290,9 +290,9 @@ return false;\
 }*/\
 if(y.style.display == \"block\")\
 {\
-if((z.value.length < 8)||(z.value.length>32))\
+if((z.value.length < 8)||(z.value.length>64))\
 {\
-alert(\"Password length is between 8 to 32\");\
+alert(\"Password length is between 8 to 64\");\
 return false;\
 }\
 }\
@@ -318,7 +318,7 @@ return false;\
 #define webHTML_BODY_START \
 "</head>\
 <BODY onLoad=\"onChangeSecType()\">\
-\r\n\r\n<form name=\"form\" method=\"post\" onsubmit=\"return onSubmitForm()\">\
+\r\n\r\n<form name=\"form\" method=\"post\" onsubmit=\"return onSubmitForm()\" accept-charset=\"utf-8\">\
 <table width=\"500\">\
 <tr>\
 <td colspan=\"2\" style=\"background-color:#FFA500;text-align:center;\">\
@@ -387,9 +387,9 @@ return false;\
 }\
 if(y.style.display == \"block\")\
 {\
-if((z.value.length < 8)||(z.value.length>32))\
+if((z.value.length < 8)||(z.value.length>64))\
 {\
-alert(\"Password length is between 8 to 32\");\
+alert(\"Password length is between 8 to 64\");\
 return false;\
 }\
 }\
@@ -410,16 +410,16 @@ return false;\
 }\
 if(z.value.length < 8)\
 {\
-alert(\"Your password is too short!(8-32)\");\
+alert(\"Your password is too short!(8-64)\");\
 return false;\
 }\
-if(z.value.length>32)\
+if(z.value.length>64)\
 {\
-alert(\"Your password is too long!(8-32)\");\
+alert(\"Your password is too long!(8-64)\");\
 */
 
 #define MAX_SOFTAP_SSID_LEN      32
-#define MAX_PASSWORD_LEN          32
+#define MAX_PASSWORD_LEN          64
 #define MAX_CHANNEL_NUM             13
 
 #if INCLUDE_uxTaskGetStackHighWaterMark
@@ -463,7 +463,7 @@ static void LoadWifiSetting()
 }
 
 #if CONFIG_READ_FLASH
-#ifndef CONFIG_PLATFORM_8195A
+#ifndef CONFIG_PLATFORM_AMEBA_X
 void LoadWifiConfig()
 {
     rtw_wifi_config_t local_config;
@@ -492,8 +492,8 @@ void LoadWifiConfig()
         wifi_setting.ssid[local_config.ssid_len] = '\0';
         wifi_setting.channel = local_config.channel;
         wifi_setting.security_type = local_config.security_type;
-        if(local_config.password_len > 32)
-            local_config.password_len = 32;
+        if(local_config.password_len > 64)
+            local_config.password_len = 64;
         memcpy(wifi_setting.password, local_config.password, local_config.password_len);
         wifi_setting.password[local_config.password_len] = '\0';
     }
@@ -576,8 +576,8 @@ void LoadWifiConfig()
           wifi_setting.security_type = RTW_SECURITY_WPA2_AES_PSK;
         else
           wifi_setting.security_type = RTW_SECURITY_OPEN;
-        if(local_config.password_len > 32)
-            local_config.password_len = 32;
+        if(local_config.password_len > 64)
+            local_config.password_len = 64;
         memcpy(wifi_setting.password, local_config.password, local_config.password_len);
         wifi_setting.password[local_config.password_len] = '\0';
     }
@@ -947,8 +947,6 @@ static void GenerateWaitHtmlPage(portCHAR* cDynamicPage)
         //printf("\r\nGenerateWaitHtmlPage Len: %d\n", strlen( cDynamicPage ));
 }
 
-
-
 static void http_translate_url_encode(char *ptr)
 {
 
@@ -1019,7 +1017,7 @@ static u8_t ProcessPostMessage(struct netbuf  *pxRxBuffer, portCHAR *LocalBuf)
         pcRxString = (char*)strstr(ptr, "&");
         *pcRxString++ = '\0';
         ptr += 5;
-	http_translate_url_encode(ptr);
+		http_translate_url_encode(ptr);
         if(strcmp((char*)wifi_setting.ssid, ptr))
         {
             bChanged = 1;

@@ -68,6 +68,7 @@ struct dhcp
   ip_addr_t offered_si_addr;
   char boot_file_name[DHCP_FILE_LEN];
 #endif /* LWIP_DHCP_BOOTPFILE */
+  u32_t seconds_elapsed;
 };
 
 /* MUST be compiled with "pack structs" or equivalent! */

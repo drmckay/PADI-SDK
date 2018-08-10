@@ -67,8 +67,10 @@
 #define RUART_TRAN_HOLD_REG_OFF         0x24  //Transmitter Holding Register
 
 #define RUART_MISC_CTL_REG_OFF          0x28
-#define RUART_TXDMA_BURSTSIZE_MASK      0xF8    //7:3
-#define RUART_RXDMA_BURSTSIZE_MASK      0x1F00  //12:8
+#define RUART_TXDMA_EN_MASK             0x02    // [1]
+#define RUART_RXDMA_EN_MASK             0x04    // [2]
+#define RUART_TXDMA_BURSTSIZE_MASK      0xF8    // [7:3]
+#define RUART_RXDMA_BURSTSIZE_MASK      0x1F00  // [12:8]
 
 #define RUART_DEBUG_REG_OFF             0x3C
 
@@ -518,6 +520,26 @@ HalRuartExitCriticalRtl8195a(
         IN VOID *Data
 );
 
+VOID
+HalRuartTxGdmaEnable8195a(
+    IN VOID *pHalRuartAdapter
+);
+
+VOID
+HalRuartTxGdmaDisable8195a(
+    IN VOID *pHalRuartAdapter
+);
+
+VOID
+HalRuartRxGdmaEnable8195a(
+    IN VOID *pHalRuartAdapter
+);
+
+VOID
+HalRuartRxGdmaDisable8195a(
+    IN VOID *pHalRuartAdapter
+);
+
 #if CONFIG_CHIP_E_CUT
 _LONG_CALL_ HAL_Status
 HalRuartResetTxFifoRtl8195a_V04(
@@ -616,7 +638,6 @@ _LONG_CALL_ VOID
 HalRuartExitCriticalRtl8195a_V04(
     IN VOID *Data
 );
-
 #endif  // #if CONFIG_CHIP_E_CUT
 
 #endif

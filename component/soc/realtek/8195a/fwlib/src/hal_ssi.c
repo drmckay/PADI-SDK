@@ -520,6 +520,16 @@ HalSsiDmaRecv(
 
 #endif  // end of "#ifdef CONFIG_GDMA_EN"
 
+VOID HalSsiClearFIFO(VOID *Data)
+{
+    PHAL_SSI_ADAPTOR pHalSsiAdapter = (PHAL_SSI_ADAPTOR) Data;
+
+    //Clear FIFO
+    HalSsiDisableRtl8195a(pHalSsiAdapter);
+    HalSsiEnableRtl8195a(pHalSsiAdapter);
+}
+
+
 HAL_Status
 HalSsiInit(VOID *Data)
 {

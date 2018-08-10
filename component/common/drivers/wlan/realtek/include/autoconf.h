@@ -22,9 +22,10 @@
 
 #ifndef CONFIG_INIC_EN
 #define CONFIG_INIC_EN 0 //For iNIC project
+#endif
+
 #if CONFIG_INIC_EN
 #define CONFIG_LWIP_LAYER    0
-#endif
 #endif
 
 #define CONFIG_LITTLE_ENDIAN
@@ -61,6 +62,7 @@
 #endif // CONFIG_PLATFORM_AMEBA_X
 
 //#define CONFIG_DONT_CARE_TP
+//#define CONFIG_HIGH_TP
 //#define CONFIG_MEMORY_ACCESS_ALIGNED
 #define CONFIG_POWER_SAVING
 #ifdef CONFIG_POWER_SAVING
@@ -128,14 +130,16 @@
 #define NOT_SUPPORT_VHT
 #define NOT_SUPPORT_40M
 #define NOT_SUPPORT_80M
+#ifndef CONFIG_PLATFORM_8711B
 #define NOT_SUPPORT_BBSWING
+#endif
 #define NOT_SUPPORT_OLD_CHANNEL_PLAN
 #define NOT_SUPPORT_BT
 
 #define CONFIG_WIFI_SPEC	0
 #define CONFIG_FAKE_EFUSE	0
 #if CONFIG_FAKE_EFUSE
-	#define FAKE_CHIPID		CHIPID_8711AN
+	#define FAKE_CHIPID		CHIPID_8710BN
 #endif
 
 #define CONFIG_AUTO_RECONNECT 1
@@ -156,9 +160,6 @@
 
 /* For promiscuous mode */
 #define CONFIG_PROMISC
-#ifdef CONFIG_PROMISC
-//#define CONFIG_PROMISC_SCAN_CONCURENT
-#endif
 
 #define PROMISC_DENY_PAIRWISE	0
 
@@ -176,9 +177,7 @@
 #endif
 
 /* For STA+AP Concurrent MODE */
-#if !defined(CONFIG_PLATFORM_8711B)
 #define CONFIG_CONCURRENT_MODE
-#endif
 #ifdef CONFIG_CONCURRENT_MODE
   #if defined(CONFIG_PLATFORM_8195A)
     #define CONFIG_RUNTIME_PORT_SWITCH
@@ -204,8 +203,11 @@
 
 // DO NOT change the below config of EAP
 #ifdef PRE_CONFIG_EAP
+#undef CONFIG_TLS
 #define CONFIG_TLS	1
+#undef CONFIG_PEAP
 #define CONFIG_PEAP	1
+#undef CONFIG_TTLS
 #define CONFIG_TTLS	1
 #endif
 
@@ -234,7 +236,7 @@
 
 /* For WPS and P2P */
 #define CONFIG_WPS
-#if 1
+#if 0
 #define CONFIG_WPS_AP
 #define CONFIG_P2P_NEW
 #if (!defined(SUPPORT_SCAN_BUF)||!defined(CONFIG_WPS_AP)) && defined(CONFIG_P2P_NEW)
@@ -243,6 +245,7 @@
 #endif
 
 #define CONFIG_NEW_SIGNAL_STAT_PROCESS
+#define CONFIG_SKIP_SIGNAL_SCALE_MAPPING
 
 /* For AP_MODE */
 #define CONFIG_AP_MODE
@@ -259,6 +262,10 @@ extern unsigned int g_ap_sta_num;
 #define AP_STA_NUM 3//g_ap_sta_num
 #endif
 #ifdef CONFIG_AP_MODE
+#if defined(CONFIG_PLATFORM_8195A)  
+	 //softap sent qos null0 polling client alive or not
+	#define CONFIG_AP_POLLING_CLIENT_ALIVE 
+#endif
 	#define CONFIG_NATIVEAP_MLME
 #if defined(CONFIG_PLATFORM_AMEBA_X)
 	#define CONFIG_INTERRUPT_BASED_TXBCN
@@ -318,17 +325,37 @@ extern unsigned int g_ap_sta_num;
 		//Control wifi mcu function
 		#define CONFIG_LITTLE_WIFI_MCU_FUNCTION_THREAD
 		#define CONFIG_ODM_REFRESH_RAMASK
-		#define CONFIG_ANTENNA_DIVERSITY
+		//#define CONFIG_ANTENNA_DIVERSITY
+		//#define CONFIG_BT_COEXIST
 	#endif
 #endif // #ifdef CONFIG_MP_INCLUDED
 
+#ifdef CONFIG_BT_COEXIST
+	#undef NOT_SUPPORT_BT
+	#define CONFIG_BT_MAILBOX
+	//#define CONFIG_BT_TWO_ANTENNA
+#endif
+
 #if defined(CONFIG_PLATFORM_AMEBA_X)
 	#if defined(CONFIG_PLATFORM_8195A)
+		#undef CONFIG_RTL8195A
 		#define CONFIG_RTL8195A
 	#endif
 	#if defined(CONFIG_PLATFORM_8711B)
 		#ifndef CONFIG_RTL8711B 
-			#define CONFIG_RTL8711B 
+			#define CONFIG_RTL8711B
+		#endif
+		#undef CONFIG_ADAPTOR_INFO_CACHING_FLASH
+		#define CONFIG_ADAPTOR_INFO_CACHING_FLASH 0
+		//#undef CONFIG_EAP
+		//#undef CONFIG_IPS
+		#define CONFIG_8710B_MOVE_TO_ROM
+		#define CONFIG_EFUSE_SEPARATE
+		#define CONFIG_MOVE_PSK_TO_ROM
+		#define CONFIG_WOWLAN
+		#define CONFIG_TRAFFIC_PROTECT
+		#ifdef CONFIG_LPS
+		#define REKEY_LEAVE_LPS
 		#endif
 	#endif
 #elif defined(CONFIG_HARDWARE_8188F)
@@ -377,13 +404,15 @@ extern unsigned int g_ap_sta_num;
 #if defined(CONFIG_PLATFORM_AMEBA_X)
 #if(DBG == 0)
 	#define ROM_E_RTW_MSG 1
+	#define ROM_F_RTW_MSG 1
 	/* For DM debug*/
 	// BB
 	#define DBG_RX_INFO 1
+	#define DBG_DM_DIG 1			// DebugComponents: bit0
+	#define DBG_DM_RA_MASK 1		// DebugComponents: bit1
+	#define DBG_DM_ANT_DIV 1		// DebugComponents: bit6
 	#define DBG_TX_RATE 1			// DebugComponents: bit9
 	#define DBG_DM_RA 1				// DebugComponents: bit9
-	#define DBG_DM_DIG 1			// DebugComponents: bit0
-	#define DBG_DM_ANT_DIV 1		// DebugComponents: bit6
 	#define DBG_DM_ADAPTIVITY 1		// DebugComponents: bit17
 	// RF
 	#define DBG_PWR_TRACKING 1		// DebugComponents: bit24
@@ -396,6 +425,9 @@ extern unsigned int g_ap_sta_num;
 /* For DM support */
 #if defined(CONFIG_RTL8188F)
 #define RATE_ADAPTIVE_SUPPORT 0
+#elif defined(CONFIG_PLATFORM_8711B)
+#define RATE_ADAPTIVE_SUPPORT 0
+#define CONFIG_ODM_REFRESH_RAMASK
 #else
 #define RATE_ADAPTIVE_SUPPORT 1
 #endif
@@ -429,8 +461,8 @@ extern unsigned int g_ap_sta_num;
 #if (SKB_PRE_ALLOCATE_RX == 1)
 	#define EXCHANGE_LXBUS_RX_SKB 0
 #endif
-#if defined(CONFIG_PLATFORM_8711B)
-//Enable mac loopback for test mode (Ameba)
+#ifdef CONFIG_FPGA
+	//Enable mac loopback for test mode (Ameba)
 	#define CONFIG_TWO_MAC_DRIVER // for test mode
 #endif
 

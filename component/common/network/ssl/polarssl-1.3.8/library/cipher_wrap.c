@@ -73,6 +73,7 @@
 #endif
 
 #include <stdlib.h>
+#include "device_lock.h"
 
 #if defined(POLARSSL_GCM_C)
 /* shared by all GCM ciphers */
@@ -107,6 +108,15 @@ static void ccm_ctx_free( void *ctx )
 static int aes_crypt_ecb_wrap( void *ctx, operation_t operation,
         const unsigned char *input, unsigned char *output )
 {
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        int ret = aes_crypt_ecb( (aes_context *) ctx, operation, input, output );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return ret;
+    }
+#endif
     return aes_crypt_ecb( (aes_context *) ctx, operation, input, output );
 }
 
@@ -114,6 +124,16 @@ static int aes_crypt_cbc_wrap( void *ctx, operation_t operation, size_t length,
         unsigned char *iv, const unsigned char *input, unsigned char *output )
 {
 #if defined(POLARSSL_CIPHER_MODE_CBC)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        int ret = aes_crypt_cbc( (aes_context *) ctx, operation, length, iv, input,
+                          output );	
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return ret;
+    }
+#endif
     return aes_crypt_cbc( (aes_context *) ctx, operation, length, iv, input,
                           output );
 #else
@@ -133,6 +153,16 @@ static int aes_crypt_cfb128_wrap( void *ctx, operation_t operation,
         const unsigned char *input, unsigned char *output )
 {
 #if defined(POLARSSL_CIPHER_MODE_CFB)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        int ret = aes_crypt_cfb128( (aes_context *) ctx, operation, length, iv_off, iv,
+                             input, output );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return ret;
+    }
+#endif
     return aes_crypt_cfb128( (aes_context *) ctx, operation, length, iv_off, iv,
                              input, output );
 #else
@@ -153,6 +183,16 @@ static int aes_crypt_ctr_wrap( void *ctx, size_t length, size_t *nc_off,
         const unsigned char *input, unsigned char *output )
 {
 #if defined(POLARSSL_CIPHER_MODE_CTR)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        int ret = aes_crypt_ctr( (aes_context *) ctx, length, nc_off, nonce_counter,
+                          stream_block, input, output );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return ret;
+    }
+#endif
     return aes_crypt_ctr( (aes_context *) ctx, length, nc_off, nonce_counter,
                           stream_block, input, output );
 #else
@@ -843,6 +883,16 @@ static int des_crypt_cbc_wrap( void *ctx, operation_t operation, size_t length,
         unsigned char *iv, const unsigned char *input, unsigned char *output )
 {
 #if defined(POLARSSL_CIPHER_MODE_CBC)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        int ret = des_crypt_cbc( (des_context *) ctx, operation, length, iv, input,
+                          output );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return ret;
+    }
+#endif
     return des_crypt_cbc( (des_context *) ctx, operation, length, iv, input,
                           output );
 #else
@@ -861,6 +911,16 @@ static int des3_crypt_cbc_wrap( void *ctx, operation_t operation, size_t length,
         unsigned char *iv, const unsigned char *input, unsigned char *output )
 {
 #if defined(POLARSSL_CIPHER_MODE_CBC)
+#ifdef RTL_HW_CRYPTO
+    if(rom_ssl_ram_map.use_hw_crypto_func)
+    {
+        device_mutex_lock(RT_DEV_LOCK_CRYPTO);
+        int ret = des3_crypt_cbc( (des3_context *) ctx, operation, length, iv, input,
+                           output );
+        device_mutex_unlock(RT_DEV_LOCK_CRYPTO);
+        return ret;
+    }
+#endif
     return des3_crypt_cbc( (des3_context *) ctx, operation, length, iv, input,
                            output );
 #else

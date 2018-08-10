@@ -1,14 +1,24 @@
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "device.h"
 #include "PinNames.h"
 #include "basic_types.h"
 #include "diag.h" 
-#include "osdep_api.h"
+#include "osdep_service.h"
 #include "i2c_api.h"
 #include "pinmap.h"
 #include "shtc1.h"
 
+#ifdef CONFIG_PLATFORM_8195A
 #define MBED_I2C_MTR_SDA    PB_3
 #define MBED_I2C_MTR_SCL    PB_2
+#endif
+
+#ifdef CONFIG_PLATFORM_8711B
+#define MBED_I2C_MTR_SDA    PA_19
+#define MBED_I2C_MTR_SCL    PA_22
+#endif
 
 #define MBED_I2C_SLAVE_ADDR0    0x70
 #define POLYNOMIAL 0x131 // P(x) = x^8 + x^5 + x^4 + 1 = 100110001
@@ -158,7 +168,7 @@ static void example_shtc1_thread(void *param)
 	float humidity = 2.456f;
 
 	DBG_8195A("sleep 10 sec. to wait for UART console\n");
-	RtlMsleepOS(10000);
+	rtw_msleep_os(10000);
 	DBG_8195A("start i2c example - SHTC1\n");
 	
 	error = SHTC_Init(&shtc1_id);
@@ -172,7 +182,7 @@ static void example_shtc1_thread(void *param)
 	while(1){
 		error = SHTC_GetTempAndHumi(&temperature, &humidity);		
 		rtl_printf("temp=%f, humidity=%f, error=%d\n", temperature, humidity, error);	
-		RtlMsleepOS(1000);
+		rtw_msleep_os(1000);
 	}
 }
 

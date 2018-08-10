@@ -32,6 +32,7 @@ void ethernet_set_descnum(uint8_t txdescCnt, uint8_t rxdescCnt)
 	HalEtherAdp.rx_desc_num = rxdescCnt;
 }
 
+
 void ethernet_trx_pre_setting(uint8_t *TxDescAddr, uint8_t *RxDescAddr, uint8_t *pTxPktBuf, uint8_t *pRxPktBuf)
 {
 	HalEtherAdp.TxDescAddr = TxDescAddr;

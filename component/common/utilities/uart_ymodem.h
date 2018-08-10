@@ -3,19 +3,26 @@
 #ifndef __YMODEM_H_
 #define __YMODEM_H_
 
-#include "osdep_api.h"
+//#include "osdep_api.h"
+#include "osdep_service.h"
 #include "serial_api.h"
 #include "flash_api.h"
 #include "device_lock.h"
 /***********************************************************************
  *                                Macros                               *
  ***********************************************************************/
+#if defined(CONFIG_PLATFORM_8711B)
+// 8710B
+#define UART_TX PA_23
+#define UART_RX PA_18
+#else
 // 8711AM
 #define UART_TX PA_7
 #define UART_RX PA_6
 //8711AF
 //#define UART_TX PA_4
 //#define UART_RX PA_0
+#endif
 
 #define UART_BAUDRATE 115200
 #define UART_YMODEM_TASK_PRIORITY	5
@@ -53,7 +60,8 @@ typedef struct _uart_ymodem_t
 	/* Used for UART RX */
 	u8 uart_rcv_buf[RCV_BUF_SIZE];
 	u8 uart_irq_buf[RCV_BUF_SIZE];
-	_Sema uart_rx_sema;
+	//_Sema uart_rx_sema;	
+	_sema uart_rx_sema;
 	u32 image_address;
 	
 	u32 tick_last_update;

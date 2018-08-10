@@ -1,4 +1,8 @@
 #include "polarssl/config_rom.h"
+#include "platform_autoconf.h"
+
+#ifdef CONFIG_SSL_ROM_TEST
+
 #define polarssl_printf DiagPrintf
 
 #define AES_POLARSSL_SELF_TEST
@@ -28,6 +32,7 @@
 #endif
 
 #include <stdio.h>
+#include "platform_autoconf.h"
 
 /*
  * AES test vectors from:
@@ -475,7 +480,6 @@ exit:
 
     return( ret );
 }
-#endif
 #endif /* POLARSSL_SELF_TEST */
 
 #if defined(ARC4_POLARSSL_SELF_TEST)
@@ -1223,7 +1227,7 @@ extern unsigned long add_count, dbl_count, mul_count;
 /*
  * Checkup routine
  */
-int ecp_self_test( int verbose )
+int ecp_self_test_1( int verbose )
 {
     int ret;
     size_t i;
@@ -2631,11 +2635,14 @@ int ssl_self_test( int verbose )
 {
 	platform_set_malloc_free(pvPortMalloc, vPortFree);
 
+	/* test SW or HW crypt */
+	rom_ssl_ram_map.use_hw_crypto_func = 1;
+	
 	if (rom_ssl_ram_map.use_hw_crypto_func && rtl_cryptoEngine_init() != SUCCESS) {
 		polarssl_printf("Use HW Crypto, but Crypto Engine Init fail!!!\n");
 		return -1;
 	}
-
+	
 	aes_self_test(1);
 	arc4_self_test(1);
 	base64_self_test(1);
@@ -2644,7 +2651,7 @@ int ssl_self_test( int verbose )
 	des_self_test(1);
 	dhm_self_test(1);
 #if defined(ECP_POLARSSL_SELF_TEST)
-	ecp_self_test(1);
+	ecp_self_test_1(1);
 #endif
 	hmac_drbg_self_test(1);
 	md5_self_test(1);
@@ -2655,3 +2662,5 @@ int ssl_self_test( int verbose )
 		
 	return 0;
 }
+#endif
+#endif //CONFIG_SSL_ROM_TEST

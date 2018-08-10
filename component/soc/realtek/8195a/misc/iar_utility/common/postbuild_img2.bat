@@ -9,13 +9,17 @@ del %cfgdir%/Exe/target.map %cfgdir%/Exe/application.asm *.bin
 cmd /c "%tooldir%\nm %cfgdir%/Exe/application.axf | %tooldir%\sort > %cfgdir%/Exe/application.map"
 cmd /c "%tooldir%\objdump -d %cfgdir%/Exe/application.axf > %cfgdir%/Exe/application.asm"
 
-for /f "delims=" %%i in ('cmd /c "%tooldir%\grep IMAGE2 %cfgdir%/Exe/application.map | %tooldir%\grep Base | %tooldir%\gawk '{print $1}'"') do set ram2_start=0x%%i
+for /f "delims=" %%i in ('cmd /c "%tooldir%\grep IMAGE2 %cfgdir%/Exe/application.map | %tooldir%\grep Base | %tooldir%\gawk '{print $1}'"') do set ram2_start_st=%%i
 for /f "delims=" %%i in ('cmd /c "%tooldir%\grep SDRAM  %cfgdir%/Exe/application.map | %tooldir%\grep Base | %tooldir%\gawk '{print $1}'"') do set ram3_start=0x%%i
 for /f "delims=" %%i in ('cmd /c "%tooldir%\grep FLASH_RUN  %cfgdir%/Exe/application.map | %tooldir%\grep Base | %tooldir%\gawk '{print $1}'"') do set flash_run_start=0x%%i
 
 for /f "delims=" %%i in ('cmd /c "%tooldir%\grep IMAGE2 %cfgdir%/Exe/application.map | %tooldir%\grep Limit | %tooldir%\gawk '{print $1}'"') do set ram2_end=0x%%i
 for /f "delims=" %%i in ('cmd /c "%tooldir%\grep SDRAM  %cfgdir%/Exe/application.map | %tooldir%\grep Limit | %tooldir%\gawk '{print $1}'"') do set ram3_end=0x%%i
 for /f "delims=" %%i in ('cmd /c "%tooldir%\grep FLASH_RUN  %cfgdir%/Exe/application.map | %tooldir%\grep Limit | %tooldir%\gawk '{print $1}'"') do set flash_run_end=0x%%i
+
+if defined %ram2_start_st (
+	set ram2_start=0x%ram2_start_st%
+)
 
 ::echo %ram1_start% > tmp.txt
 ::echo %ram2_start% >> tmp.txt
@@ -24,12 +28,19 @@ for /f "delims=" %%i in ('cmd /c "%tooldir%\grep FLASH_RUN  %cfgdir%/Exe/applica
 ::echo %ram2_end% >> tmp.txt
 ::echo %ram3_end% >> tmp.txt
 
-%tooldir%\objcopy -j "A3 rw" -Obinary %cfgdir%/Exe/application.axf %cfgdir%/Exe/ram_2.bin
+for /f %%i in ('cmd /c "%tooldir%\readelf -S %cfgdir%/Exe/application.axf | %tooldir%\grep %ram2_start_st% | %tooldir%\cut -c 8-10"') do set sectname_img2=%%i
+::echo sectname_img2 is %sectname_img2% rw >> tmp.txt
+for /f %%i in ('cmd /c "%tooldir%\readelf -S %cfgdir%/Exe/application.axf | %tooldir%\grep 30000000 | %tooldir%\cut -c 8-10"') do set sectname_sdram=%%i
+::echo %sectname_sdram% rw >> tmp.txt
+for /f %%i in ('cmd /c "%tooldir%\readelf -S %cfgdir%/Exe/application.axf | %tooldir%\grep 98000000 | %tooldir%\cut -c 8-10"') do set sectname_flash=%%i
+::echo %sectname_flash% rw >> tmp.txt
+
+%tooldir%\objcopy -j "%sectname_img2% rw" -Obinary %cfgdir%/Exe/application.axf %cfgdir%/Exe/ram_2.bin
 if defined %ram3_start (
-	%tooldir%\objcopy -j "A5 rw" -Obinary %cfgdir%/Exe/application.axf %cfgdir%/Exe/sdram.bin
+	%tooldir%\objcopy -j "%sectname_sdram% rw" -Obinary %cfgdir%/Exe/application.axf %cfgdir%/Exe/sdram.bin
 )
 if defined %flash_run_start (
-	%tooldir%\objcopy -j "A7 rw" -Obinary %cfgdir%/Exe/application.axf %cfgdir%/Exe/flash_run.bin
+	%tooldir%\objcopy -j "%sectname_flash% rw" -Obinary %cfgdir%/Exe/application.axf %cfgdir%/Exe/flash_run.bin
 ) else (
 	set flash_run_start=0xFFFFFFFF
 	set flash_run_end=0xFFFFFFFF

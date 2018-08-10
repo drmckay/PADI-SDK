@@ -45,6 +45,37 @@
 
 #if defined(POLARSSL_HAVE_ASM)
 
+// Reatek: POLARSSL_HAVE_ASM code in IAR
+#if defined(__ICCARM__)
+                                         
+#define MULADDC_INIT                                    \
+    asm(                                                \
+            "mov    r0, %3                      \n\t"   \
+            "mov    r1, %4                      \n\t"   \
+            "mov    r2, %5                      \n\t"   \
+            "mov    r3, %6                      \n\t"
+
+#define MULADDC_CORE                                    \
+            "ldr    r4, [r0], #4                \n\t"   \
+            "mov    r5, #0                      \n\t"   \
+            "ldr    r6, [r1]                    \n\t"   \
+            "umlal  r2, r5, r3, r4              \n\t"   \
+            "adds   r7, r6, r2                  \n\t"   \
+            "adc    r2, r5, #0                  \n\t"   \
+            "str    r7, [r1], #4                \n\t"
+
+#define MULADDC_STOP                                    \
+            "mov    %0, r2                      \n\t"   \
+            "mov    %1, r1                      \n\t"   \
+            "mov    %2, r0                      \n\t"   \
+         : "=r" (c),  "=r" (d), "=r" (s)        \
+         : "r" (s), "r" (d), "r" (c), "r" (b)   \
+         : "r0", "r1", "r2", "r3", "r4", "r5",  \
+           "r6", "r7", "cc"                     \
+         );
+
+#endif /*__ICCARM__*/
+
 #if defined(__GNUC__)
 #if defined(__i386__)
 

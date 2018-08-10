@@ -23,11 +23,9 @@
 extern "C" {
 #endif
 
-
-
 #define ETH_TX_DESC_SIZE	20  // 20 Bytes
 #define ETH_RX_DESC_SIZE	16  // 16 Bytes
-#define ETH_PKT_BUF_SIZE	1536
+#define ETH_PKT_BUF_SIZE	1600
 
 
 typedef void (*ethernet_callback)(uint32_t event, uint32_t data);

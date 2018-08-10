@@ -157,8 +157,8 @@ __weak void __low_level_init(void)
 }
 
 #if defined ( __ICCARM__ )
-#pragma section="SDRAM.bss"
-#pragma section="SDRAM.bss"
+#pragma section="SDRBSS"
+#pragma section="SDRBSS"
 #endif
 // The Main App entry point
 void _AppStart(void)
@@ -195,8 +195,8 @@ void _AppStart(void)
 	// __iar_data_init3 replaced by __iar_cstart_call_ctors, just do c++ constructor,
 	__iar_cstart_call_ctors(NULL);
 	// clear SDRAM bss
-	u8* __sdram_bss_start__		= (u8*)__section_begin("SDRAM.bss");
-	u8* __sdram_bss_end__			= (u8*)__section_end("SDRAM.bss");
+	u8* __sdram_bss_start__		= (u8*)__section_begin("SDRBSS");
+	u8* __sdram_bss_end__			= (u8*)__section_end("SDRBSS");
 	//DiagPrintf("clean sdram bss %8x to %8x\n\r", __sdram_bss_start__, __sdram_bss_end__);
 	if((int)__sdram_bss_end__-(int)__sdram_bss_start__ > 0)
 		memset(__sdram_bss_start__, 0, (int)__sdram_bss_end__-(int)__sdram_bss_start__);
@@ -206,7 +206,7 @@ void _AppStart(void)
 	extern u8 __sdram_bss_end__[];
 	//DiagPrintf("clean sdram bss %8x to %8x\n\r", __sdram_bss_start__, __sdram_bss_end__);
 	if((int)__sdram_bss_end__-(int)__sdram_bss_start__ > 0)
-		memset(__sdram_bss_start__, 0, (int)__sdram_bss_end__-(int)__sdram_bss_start__);
+		_memset(__sdram_bss_start__, 0, (int)__sdram_bss_end__-(int)__sdram_bss_start__);
 #else
 	#error !!!!!!NOT Support this compiler!!!!!!
 #endif

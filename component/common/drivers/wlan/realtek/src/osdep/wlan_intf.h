@@ -42,7 +42,8 @@ struct sk_buff {
 //----- ------------------------------------------------------------------
 int rltk_wlan_init(int idx_wlan, rtw_mode_t mode);				//return 0: success. -1:fail
 void rltk_wlan_deinit(void);
-void rltk_wlan_start(int idx_wlan);
+void rltk_wlan_deinit_fastly(void);
+int rltk_wlan_start(int idx_wlan);
 void rltk_wlan_statistic(unsigned char idx);
 unsigned char rltk_wlan_running(unsigned char idx);		// interface is up. 0: interface is down
 int rltk_wlan_control(unsigned long cmd, void *data);

@@ -68,7 +68,7 @@ struct eth_frame {
 };
 
 #if CONFIG_INIC_CMD_RSP
-#if defined(__IAR_SYSTEMS_ICC__)
+#if defined(__IAR_SYSTEMS_ICC__)||defined (__GNUC__)
 #pragma pack(1)
 #endif
 struct inic_eth_frame {
@@ -77,7 +77,7 @@ struct inic_eth_frame {
 	unsigned int len;
 	unsigned char type;
 };
-#if defined(__IAR_SYSTEMS_ICC__)
+#if defined(__IAR_SYSTEMS_ICC__)||defined (__GNUC__)
 #pragma pack()
 #endif
 
@@ -114,7 +114,7 @@ void promisc_init_packet_filter()
 	packet_filter_enable_num = 0;
 }
 
-int promisc_add_packet_filter(u8 filter_id, rtw_packet_filter_pattern_t *patt, rtw_packet_filter_rule_e rule)
+int promisc_add_packet_filter(u8 filter_id, rtw_packet_filter_pattern_t *patt, rtw_packet_filter_rule_t rule)
 {
 	int i = 0;
 	while(i < MAX_PACKET_FILTER_INFO){

@@ -79,6 +79,23 @@ int wext_set_bssid(const char *ifname, const __u8 *bssid)
 	return ret;
 }
 
+int wext_get_bssid(const char*ifname, __u8 *bssid)
+{
+	struct iwreq iwr;
+	int ret = 0;
+
+	memset(&iwr, 0, sizeof(iwr));
+
+	if (iw_ioctl(ifname, SIOCGIWAP, &iwr) < 0) {
+		printf("\n\rioctl[SIOCSIWAP] error");
+		ret = -1;
+	} else {
+	    memcpy(bssid, iwr.u.ap_addr.sa_data, ETH_ALEN);
+    }
+
+	return ret;
+}
+
 int is_broadcast_ether_addr(const unsigned char *addr)
 {
 	return (addr[0] & addr[1] & addr[2] & addr[3] & addr[4] & addr[5]) == 0xff;
@@ -882,11 +899,9 @@ void wext_wlan_indicate(unsigned int cmd, union iwreq_data *wrqu, char *extra)
 			else
 				wifi_indication(WIFI_EVENT_SCAN_RESULT_REPORT, wrqu->data.pointer, wrqu->data.length, 0);
 			break;
-#if CONFIG_ENABLE_P2P
 		case IWEVMGNTRECV:
 			wifi_indication(WIFI_EVENT_RX_MGNT, wrqu->data.pointer, wrqu->data.length, wrqu->data.flags);
 			break;
-#endif
 #ifdef REPORT_STA_EVENT
 		case IWEVREGISTERED:
 			if(wrqu->addr.sa_family == ARPHRD_ETHER)
@@ -921,9 +936,6 @@ int wext_send_eapol(const char *ifname, char *buf, __u16 buf_len, __u16 flags)
 	return ret;
 }
 
-
-
-#if CONFIG_ENABLE_P2P
 int wext_send_mgnt(const char *ifname, char *buf, __u16 buf_len, __u16 flags)
 {
 	struct iwreq iwr;
@@ -939,7 +951,6 @@ int wext_send_mgnt(const char *ifname, char *buf, __u16 buf_len, __u16 flags)
 	}
 	return ret;
 }
-#endif
 
 int wext_set_gen_ie(const char *ifname, char *buf, __u16 buf_len, __u16 flags)
 {
@@ -957,7 +968,7 @@ int wext_set_gen_ie(const char *ifname, char *buf, __u16 buf_len, __u16 flags)
 	return ret;
 }
 
-int wext_set_autoreconnect(const char *ifname, __u8 mode, __u8 retyr_times, __u16 timeout)
+int wext_set_autoreconnect(const char *ifname, __u8 mode, __u8 retry_times, __u16 timeout)
 {
 	struct iwreq iwr;
 	int ret = 0;
@@ -973,7 +984,7 @@ int wext_set_autoreconnect(const char *ifname, __u8 mode, __u8 retyr_times, __u1
 	snprintf((char*)para, cmd_len, "SetAutoRecnt");
 	//length
 	*(para+cmd_len) = mode;	//para1
-	*(para+cmd_len+1) = retyr_times; //para2
+	*(para+cmd_len+1) = retry_times; //para2
 	*(para+cmd_len+2) = timeout; //para3
 	
 	iwr.u.data.pointer = para;
@@ -1320,4 +1331,11 @@ int wext_del_mac_filter(unsigned char* hwaddr)
 		}
 	}
 	return -1;
+}
+
+extern void rtw_set_indicate_mgnt(int enable);
+void wext_set_indicate_mgnt(int enable)
+{
+	rtw_set_indicate_mgnt(enable);
+	return;
 }

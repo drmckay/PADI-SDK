@@ -1765,12 +1765,24 @@ lwip_getsockopt_impl(int s, int level, int optname, void *optval, socklen_t *opt
 
 #if LWIP_SO_SNDTIMEO
     case SO_SNDTIMEO:
+      // Be compatible with lwip 1.4.1
+      if(sizeof(int) == *optlen) {
+        *((int *) optval) = netconn_get_sendtimeout(sock->conn);
+        break;
+      }
+
       LWIP_SOCKOPT_CHECK_OPTLEN_CONN(sock, *optlen, LWIP_SO_SNDRCVTIMEO_OPTTYPE);
       LWIP_SO_SNDRCVTIMEO_SET(optval, netconn_get_sendtimeout(sock->conn));
       break;
 #endif /* LWIP_SO_SNDTIMEO */
 #if LWIP_SO_RCVTIMEO
     case SO_RCVTIMEO:
+      // Be compatible with lwip 1.4.1
+      if(sizeof(int) == *optlen) {
+        *((int *) optval) = netconn_get_recvtimeout(sock->conn);
+        break;
+      }
+
       LWIP_SOCKOPT_CHECK_OPTLEN_CONN(sock, *optlen, LWIP_SO_SNDRCVTIMEO_OPTTYPE);
       LWIP_SO_SNDRCVTIMEO_SET(optval, netconn_get_recvtimeout(sock->conn));
       break;
@@ -2101,12 +2113,24 @@ lwip_setsockopt_impl(int s, int level, int optname, const void *optval, socklen_
 
 #if LWIP_SO_SNDTIMEO
     case SO_SNDTIMEO:
+      // Be compatible with lwip 1.4.1
+      if(sizeof(int) == optlen) {
+        netconn_set_sendtimeout(sock->conn, *((int *) optval));
+        break;
+      }
+
       LWIP_SOCKOPT_CHECK_OPTLEN_CONN(sock, optlen, LWIP_SO_SNDRCVTIMEO_OPTTYPE);
       netconn_set_sendtimeout(sock->conn, LWIP_SO_SNDRCVTIMEO_GET_MS(optval));
       break;
 #endif /* LWIP_SO_SNDTIMEO */
 #if LWIP_SO_RCVTIMEO
     case SO_RCVTIMEO:
+      // Be compatible with lwip 1.4.1
+      if(sizeof(int) == optlen) {
+        netconn_set_recvtimeout(sock->conn, *((int *) optval));
+        break;
+      }
+
       LWIP_SOCKOPT_CHECK_OPTLEN_CONN(sock, optlen, LWIP_SO_SNDRCVTIMEO_OPTTYPE);
       netconn_set_recvtimeout(sock->conn, (int)LWIP_SO_SNDRCVTIMEO_GET_MS(optval));
       break;

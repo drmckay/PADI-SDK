@@ -1,6 +1,8 @@
 #include <platform_stdlib.h>
 #include <platform_opts.h>
+#ifndef CONFIG_PLATFORM_8711B
 #include <hal_adc.h>
+#endif
 #include <gpio_api.h>   // mbed
 #include <sys_api.h>
 #include <flash_api.h>
@@ -9,7 +11,6 @@
 #include "analogin_api.h"
 #include "log_service.h"
 #include "atcmd_sys.h"
-#include "osdep_api.h"
 #include "main.h"
 #include "atcmd_wifi.h"
 
@@ -22,10 +23,9 @@ extern u32 ConfigDebugInfo;
 extern u32 ConfigDebugWarn;
 extern u32 CmdDumpWord(IN u16 argc, IN u8 *argv[]);
 extern u32 CmdWriteWord(IN u16 argc, IN u8 *argv[]);
-#if CONFIG_UART_XMODEM
-extern void OTU_FW_Update(u8, u8, u32);
+#if CONFIG_UART_YMODEM
+extern int uart_ymodem(void);
 #endif
-
 
 //#if ATCMD_VER == ATVER_1
 #if (configGENERATE_RUN_TIME_STATS == 1)
@@ -77,14 +77,87 @@ void fATSR(void *arg)
 	sys_recover_ota_signature();
 }
 
-#if CONFIG_UART_XMODEM
+#if CONFIG_UART_YMODEM
 void fATSY(void *arg)
 {
-	// use xmodem to update, RX: PA_6, TX: PA_7, baudrate: 1M
-	OTU_FW_Update(0, 2, 115200);	
+	uart_ymodem();
 }
 #endif
 
+#if defined(CONFIG_PLATFORM_8711B)
+void fATSK(void *arg)
+{
+	int argc = 0;
+	char *argv[MAX_ARGC] = {0};
+	u8 key[16];
+
+	AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK]: _AT_SYSTEM_RDP/RSIP_CONFIGURE_");
+	if(!arg){
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RDP_EN");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RDP_KEY[value(hex)]");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] 	Example: ATSK=RDP_KEY[345487bbaa435bfe382233445ba359aa]");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_EN");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_DIS");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_KEY[value(hex)]");
+		return;
+	}
+
+	argc = parse_param(arg, argv);
+	if(strcmp(argv[1], "RDP_EN") == 0){
+		EFUSE_RDP_EN();
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] RDP is enable");
+	}else if(strcmp(argv[1], "RDP_KEY") == 0){
+		if(argc != 3){
+			AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RDP_KEY[value(hex)]");
+			return;
+		}
+
+		if(strlen(argv[2]) != 32){
+			AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Err: RDP key length should be 16 bytes");
+			return;
+		}
+		
+		sscanf(argv[2], "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x", 
+			&key[0], &key[1], &key[2], &key[3], &key[4], &key[5], &key[6], &key[7], 
+			&key[8], &key[9], &key[10], &key[11], &key[12], &key[13], &key[14], &key[15]);
+
+		EFUSE_RDP_KEY(key);
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Set RDP key done");
+	}else if(strcmp(argv[1], "RSIP_EN") == 0){
+		efuse_otf_cmd(ENABLE);
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] RSIP is enable");
+	}else if(strcmp(argv[1], "RSIP_DIS") == 0){
+		efuse_otf_cmd(DISABLE);
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] RSIP is disable");
+	}else if(strcmp(argv[1], "RSIP_KEY") == 0){
+		if(argc != 3){
+			AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_KEY[value(hex)]");
+			return;
+		}
+
+		if(strlen(argv[2]) != 32){
+			AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Err: RSIP key length should be 16 bytes");
+			return;
+		}
+		
+		sscanf(argv[2], "%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x", 
+			&key[0], &key[1], &key[2], &key[3], &key[4], &key[5], &key[6], &key[7], 
+			&key[8], &key[9], &key[10], &key[11], &key[12], &key[13], &key[14], &key[15]);
+
+		EFUSE_OTF_KEY(key);
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Set RSIP key done");
+	}else{
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RDP_EN");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RDP_KEY[value(hex)]");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] 	Example: ATSK=RDP_KEY[345487bbaa435bfe382233445ba359aa]");		
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_EN");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_DIS");
+		AT_DBG_MSG(AT_FLAG_RDP, AT_DBG_ALWAYS, "[ATSK] Usage: ATSK=RSIP_KEY[value(hex)]");
+		
+	}
+	
+}
+#endif
 
 #if SUPPORT_MP_MODE
 void fATSA(void *arg)
@@ -96,7 +169,7 @@ void fATSA(void *arg)
 	
 	AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA]: _AT_SYSTEM_ADC_TEST_");
 	if(!arg){
-		AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] Usage: ATSA=CHANNEL(0~2)");
+		AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] Usage: ATSA=CHANNEL(1~3)");
 		AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] Usage: ATSA=k_get");
 		AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] Usage: ATSA=k_set[offet(hex),gain(hex)]");
 		return;
@@ -117,8 +190,8 @@ void fATSA(void *arg)
 //		AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] offset = 0x%04X, gain = 0x%04X", offset, gain);
 	}else{
 		channel = atoi(argv[1]);
-		if(channel < 0 || channel > 2){
-			AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] Usage: ATSA=CHANNEL(0~2)");
+		if(channel < 1 || channel > 3){
+			AT_DBG_MSG(AT_FLAG_ADC, AT_DBG_ALWAYS, "[ATSA] Usage: ATSA=CHANNEL(1~3)");
 			return;
 		}
 		analogin_t   adc;
@@ -126,9 +199,9 @@ void fATSA(void *arg)
 		
 		// Remove debug info massage
 		ConfigDebugInfo = 0;
-		if(channel == 0)
+		if(channel == 1)
 			analogin_init(&adc, AD_1);
-		else if(channel == 1)
+		else if(channel == 2)
 			analogin_init(&adc, AD_2);
 		else
 			analogin_init(&adc, AD_3);
@@ -143,6 +216,7 @@ void fATSA(void *arg)
 
 void fATSG(void *arg)
 {
+#if defined(CONFIG_PLATFORM_8195A)
     gpio_t gpio_test;
     int argc = 0, val;
 	char *argv[MAX_ARGC] = {0}, port, num;
@@ -251,11 +325,73 @@ void fATSG(void *arg)
 	// Recover debug info massage
 	ConfigDebugInfo = tConfigDebugInfo;
 	AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSG] %c%c = %d", port, num, val);
-}
 
+#elif defined(CONFIG_PLATFORM_8711B)
+    gpio_t gpio_test;
+    int argc = 0, val, num;
+	char *argv[MAX_ARGC] = {0}, port;
+	PinName pin = NC;
+	u32 tConfigDebugInfo = ConfigDebugInfo;
+    
+	AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSG]: _AT_SYSTEM_GPIO_TEST_");
+	if(!arg){
+		AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSG] Usage: ATSG=PINNAME(ex:A0)");
+		return;
+	}else{
+		argc = parse_param(arg, argv);
+		if(argc != 2){
+			AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSG] Usage: ATSG=PINNAME(ex:A0)");
+			return;
+		}
+	}
+	port = argv[1][0];
+	if(port >= 'a' && port <= 'z')
+		port -= ('a' - 'A');
+	num = atoi(argv[1] + 1);
+	
+	//PA_6~PA_11 are not allowed to be tested when code running on flash. 
+	//PA_16~PA_17 or PA_29~PA_30 should not be tested when they are used as log UART RX and TX.
+	switch(port){
+		case 'A':
+			switch(num){
+				case 0: pin = PA_0; break; case 1: pin = PA_1; break; case 2: pin = PA_2; break; case 3: pin = PA_3; break;
+				case 4: pin = PA_4; break; case 5: pin = PA_5; break;  /*case 6:pin = PA_6; break; case 7: pin = PA_7; break;
+				case 8: pin = PA_8; break; case 9: pin = PA_9; break; case 10: pin = PA_10; break; case 11: pin = PA_11; break;*/
+				case 12: pin = PA_12; break; case 13: pin = PA_13; break; case 14: pin = PA_14; break; case 15: pin = PA_15; break;
+				case 16: pin = PA_16; break; case 17: pin = PA_17; break; case 18: pin = PA_18; break; case 19: pin = PA_19; break;
+				case 20: pin = PA_20; break; case 21: pin = PA_21; break; case 22: pin = PA_22; break; case 23: pin = PA_23; break;
+				case 24: pin = PA_24; break; case 25: pin = PA_25; break; case 26: pin = PA_26; break; case 27: pin = PA_27; break;
+				case 28: pin = PA_28; break; case 29: pin = PA_29; break; case 30: pin = PA_30; break; case 31: pin = PA_31; break;
+			}
+			break;
+		case 'B':
+			switch(num){
+				case 0: pin = PB_0; break; case 1: pin = PB_1; break; case 2: pin = PB_2; break; case 3: pin = PB_3; break;
+				case 4: pin = PB_4; break; case 5: pin = PB_5; break; case 6: pin = PB_6; break; case 7: pin = PB_7; break;
+			}
+			break;
+	}
+	if(pin == NC){
+		AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSG]: Invalid Pin Name");
+		return;
+	}
+	// Remove debug info massage
+	ConfigDebugInfo = 0;
+	// Initial input control pin
+	gpio_init(&gpio_test, pin);
+	gpio_dir(&gpio_test, PIN_INPUT);     // Direction: Input
+	gpio_mode(&gpio_test, PullUp);       // Pull-High
+	val = gpio_read(&gpio_test);
+	// Recover debug info massage
+	ConfigDebugInfo = tConfigDebugInfo;
+	AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSG] %c%d = %d", port, num, val);
+
+#endif
+}
 
 void fATSP(void *arg)
 {
+#if defined(CONFIG_PLATFORM_8195A)
 	int   argc           = 0;
 	char *argv[MAX_ARGC] = {0};
 
@@ -272,6 +408,7 @@ void fATSP(void *arg)
 	AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSP]: _AT_SYSTEM_POWER_PIN_TEST_");
 	if(!arg) {
 		AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSP]: Usage: ATSP=gpiob1[timeout,zerocount]");
+		return;
 	} else {
 		argc = parse_param(arg, argv);
 		if (argc < 2) {
@@ -326,6 +463,7 @@ void fATSP(void *arg)
 			AT_DBG_MSG(AT_FLAG_GPIO, AT_DBG_ALWAYS, "[ATSP]: fail, it only got %d zeros", zerocount);
 		}
 	}
+#endif
 }
 
 int write_otu_to_system_data(flash_t *flash, uint32_t otu_addr)
@@ -373,20 +511,20 @@ void fATSB(void *arg)
 	// parameter check
 	AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: _AT_SYSTEM_BOOT_OTU_PIN_SET_");
 	if(!arg) {
-		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN, TRIGER_MODE, UART]");
+		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN,TRIGER_MODE,UART]");
 		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: GPIO_PIN: PB_1, PC_4 ....");
 		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: TRIGER_MODE: low_trigger, high_trigger");
 		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: UART: UART0, UART2");
-		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2, low_trigger, UART2]");
-
+		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2,low_trigger,UART2]");
+		return;
 	} else {
 		argc = parse_param(arg, argv);
 		if (argc != 4 ) {
-			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN, TRIGER_MODE, UART]");
+			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN,TRIGER_MODE,UART]");
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: GPIO_PIN: PB_1, PC_4 ....");
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: TRIGER_MODE: low_trigger, high_trigger");
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: UART: UART0, UART2");
-			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2, low_trigger, UART2]");
+			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2,low_trigger,UART2]");
 			return;
 		}
 	}
@@ -394,7 +532,7 @@ void fATSB(void *arg)
 	if ( strncmp(argv[1], "P", 1) == 0 && strlen(argv[1]) == 4
 		&& (strcmp(argv[2], "low_trigger") == 0 || strcmp(argv[2], "high_trigger") == 0)
 		&& strncmp(argv[3], "UART", 4) == 0 && strlen(argv[3]) == 5) {
-		if((0x41 <= argv[1][1] <= 0x45) && (0x30 <= argv[1][3] <= 0x39) &&(0x30 <= argv[1][4] <= 0x32)){
+		if((argv[1][1] >= 0x41 && argv[1][1] <= 0x45) && (argv[1][3] >= 0x30 && argv[1][3] <= 0x39) &&(argv[3][4] >= 0x30 && argv[3][4] <= 0x32)){
 			if(strcmp(argv[2], "high_trigger") == 0)
 				gpio_pin = 1<< 7 | ((argv[1][1]-0x41)<<4) | (argv[1][3] - 0x30);
 			else
@@ -407,7 +545,7 @@ void fATSB(void *arg)
 				uart_port = (uart_index<<4)|0;
 			else{
 				AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Input UART index error. Please choose UART0 or UART2.");
-				AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2, low_trigger, UART2]");
+				AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2,low_trigger,UART2]");
 				return;
 			}
 			uart_port_bar = ~uart_port;
@@ -421,18 +559,18 @@ void fATSB(void *arg)
 			flash_read_word(&flash, FLASH_SYSTEM_DATA_ADDR+0x0c, &rb_boot_gpio);			
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]:Read 0x900c 0x%x", rb_boot_gpio);
 		}else{
-			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN, TRIGER_MODE, UART]");
+			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN,TRIGER_MODE,UART]");
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: GPIO_PIN: PB_1, PC_4 ....");
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: TRIGER_MODE: low_trigger, high_trigger");
 			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: UART: UART0, UART2");
-			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2, low_trigger, UART2]");
+			AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2,low_trigger,UART2]");
 		}		
 	}else{
-		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN, TRIGER_MODE, UART]");
+		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: Usage: ATSB=[GPIO_PIN,TRIGER_MODE,UART]");
 		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: GPIO_PIN: PB_1, PC_4 ....");
 		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: TRIGER_MODE: low_trigger, high_trigger");
 		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: UART: UART0, UART2");
-		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2, low_trigger, UART2]");
+		AT_DBG_MSG(AT_FLAG_DUMP, AT_DBG_ALWAYS, "[ATSB]: example: ATSB=[PC_2,low_trigger,UART2]");
 		return;
 	}
 }
@@ -513,7 +651,7 @@ void fATSJ(void *arg)
 	char *argv[MAX_ARGC] = {0};
 	AT_PRINTK("[ATSJ]: _AT_SYSTEM_JTAG_");
 	if(!arg){
-		AT_PRINTK("[ATS!] Usage: ATSJ=off");
+		AT_PRINTK("[ATSJ] Usage: ATSJ=off");
 	}else{
 		argc = parse_param(arg, argv);
 		if (strcmp(argv[1], "off" ) == 0)
@@ -534,7 +672,7 @@ void fATSx(void *arg)
 	strcpy(buf, "v");
 //	if(ability & 0x1)
 //		strcat(buf, "m");
-	strcat(buf, ".3.5." RTL8195AFW_COMPILE_DATE);
+	strcat(buf, ".3.4." RTL8195AFW_COMPILE_DATE);
 	AT_PRINTK("[ATS?]: SW VERSION: %s", buf);
 }
 #elif ATCMD_VER == ATVER_2
@@ -588,7 +726,7 @@ void fATSV(void *arg){
 
 	// get fw version
 	strcpy(fw_buf, SDK_VERSION);
-
+	
 	at_printf("\r\n[ATSV] OK:%s,%s(%s)",at_buf,fw_buf,RTL8195AFW_COMPILE_TIME);
 }
 
@@ -615,15 +753,15 @@ void fATSP(void *arg){
 	switch(argv[1][0]) {
 		case 'a': // acquire
 		{
-			acquire_wakelock(WAKELOCK_OS);
-			//at_printf("\r\n[ATSP] wakelock:0x%08x", get_wakelock_status());			
+			pmu_acquire_wakelock(PMU_OS);
+			//at_printf("\r\n[ATSP] wakelock:0x%08x", pmu_get_wakelock_status());			
 			break;
 		}
 
 		case 'r': // release
 		{
-			release_wakelock(WAKELOCK_OS);
-			//at_printf("\r\n[ATSP] wakelock:0x%08x", get_wakelock_status());
+			pmu_release_wakelock(PMU_OS);
+			//at_printf("\r\n[ATSP] wakelock:0x%08x", pmu_get_wakelock_status());
 			break;
 		}
 
@@ -634,8 +772,8 @@ void fATSP(void *arg){
 			at_printf("\r\n[ATSP] ERROR:2");
 			return;
 	}
-	bitmap = get_wakelock_status();
-	at_printf("\r\n[ATSP] OK:%s", (bitmap&WAKELOCK_OS)?"1":"0");
+	bitmap = pmu_get_wakelock_status();
+	at_printf("\r\n[ATSP] OK:%s", (bitmap&BIT(PMU_OS))?"1":"0");
 }
 #endif
 
@@ -644,7 +782,7 @@ void fATSE(void *arg){
 	int echo = 0, mask = gDbgFlag, dbg_lv = gDbgLevel;
 	char *argv[MAX_ARGC] = {0};
 	int err_no = 0;
-	
+
 	AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_ALWAYS, "[ATSE]: _AT_SYSTEM_ECHO_DBG_SETTING");	
 	if(!arg){
 		AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_ERROR, "[ATSE] Usage: ATSE=<echo>,<dbg_msk>,<dbg_lv>");
@@ -679,7 +817,7 @@ void fATSE(void *arg){
 		dbg_lv = strtoul(argv[3], NULL, 0);
 		at_set_debug_level(dbg_lv);
 	}
-
+	
 exit:
 	if(err_no)
 		at_printf("\r\n[ATSE] ERROR:%d", err_no);
@@ -757,7 +895,7 @@ void fATSY(void *arg){
 	// Reset ota image  signature
 	cmd_ota_image(0);
 #endif	
-
+	
 	at_printf("\r\n[ATSY] OK");
 	// reboot
 	sys_reset();
@@ -803,8 +941,8 @@ void fATSC(void *arg){
 	}
 	if((argc = parse_param(arg, argv)) != 2){
 		AT_DBG_MSG(AT_FLAG_OTA, AT_DBG_ERROR, "\r\n[ATSC] Usage: ATSC=<0/1>");
-		at_printf("\r\n[ATSC] ERROR:1");
-		return;
+	  at_printf("\r\n[ATSC] ERROR:1");
+	  return;
 	}
 
 	cmd = atoi(argv[1]);
@@ -851,8 +989,8 @@ void fATSU(void *arg){
 	if((argc = parse_param(arg, argv)) != 7){
 		AT_DBG_MSG(AT_FLAG_COMMON, AT_DBG_ERROR, 
 		"[ATSU] Usage: ATSU=<baud>,<databits>,<stopbits>,<parity>,<flowcontrol>,<configmode>");
-	  at_printf("\r\n[ATSU] ERROR:1");
-	  return;
+		at_printf("\r\n[ATSU] ERROR:1");
+		return;
 	}
 
 	baud = atoi(argv[1]);
@@ -957,10 +1095,12 @@ void fATSG(void *arg)
 		gpio_mode(&gpio_ctrl, pull);
 	}
 	if(argv[1][0] == 'R'){
+		gpio_dir(&gpio_ctrl, PIN_INPUT);
 		val = gpio_read(&gpio_ctrl);
 	}
-	else{
+	else if(argv[1][0] == 'W'){
 		val = atoi(argv[3]);
+		gpio_dir(&gpio_ctrl, PIN_OUTPUT);
 		gpio_write(&gpio_ctrl, val);
 	}
 	
@@ -1002,9 +1142,9 @@ void fATSL(void *arg)
 		{
 			if (argc == 3) {
 				lock_id = strtoul(argv[2], NULL, 16);
-				acquire_wakelock(lock_id);
+				pmu_acquire_wakelock(lock_id);
 			}
-			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", get_wakelock_status());			
+			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", pmu_get_wakelock_status());			
 			break;
 		}
 
@@ -1012,16 +1152,16 @@ void fATSL(void *arg)
 		{
 			if (argc == 3) {
 				lock_id = strtoul(argv[2], NULL, 16);
-				release_wakelock(lock_id);
+				pmu_release_wakelock(lock_id);
 			}
-			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", get_wakelock_status());
+			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", pmu_get_wakelock_status());
 			break;
 		}
 
 		case '?': // get status
-			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", get_wakelock_status());
+			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] wakelock:0x%08x", pmu_get_wakelock_status());
 #if (configGENERATE_RUN_TIME_STATS == 1)
-			get_wakelock_hold_stats((char *)cBuffer);
+			pmu_get_wakelock_hold_stats((char *)cBuffer);
 			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "%s", cBuffer);
 #endif
 			break;
@@ -1029,7 +1169,7 @@ void fATSL(void *arg)
 #if (configGENERATE_RUN_TIME_STATS == 1)
 		case 'c': // clean wakelock info (for recalculate wakelock hold time)
 			AT_DBG_MSG(AT_FLAG_OS, AT_DBG_ALWAYS, "[ATSL] clean wakelock stat");
-			clean_wakelock_stat();
+			pmu_clean_wakelock_stat();
 			break;
 #endif
 		default:
@@ -1042,29 +1182,24 @@ exit:
 	if(err_no)
 		at_printf("\r\n[ATSL] ERROR:%d", err_no);
 	else
-		at_printf("\r\n[ATSL] OK:0x%08x",get_wakelock_status());
+		at_printf("\r\n[ATSL] OK:0x%08x",pmu_get_wakelock_status());
 #endif
 	return;
 }
-
-#if CONFIG_UART_XMODEM
-void fATSX(void *arg)
-{
-	// use xmodem to update, RX: PA_6, TX: PA_7, baudrate: 1M
-	OTU_FW_Update(0, 2, 115200);	
-	at_printf("\r\n[ATSX] OK");
-}
-#endif
-
 #endif
 
 log_item_t at_sys_items[] = {
 #if ATCMD_VER == ATVER_1
 	{"ATSD", fATSD,},	// Dump register
 	{"ATSE", fATSE,},	// Edit register
+#if defined(CONFIG_PLATFORM_8711B)
+	{"ATSK", fATSK,},   // Set RDP/RSIP enable and key
+#endif
+#if CONFIG_OTA_UPDATE
 	{"ATSC", fATSC,},	// Clear OTA signature
 	{"ATSR", fATSR,},	// Recover OTA signature
-#if CONFIG_UART_XMODEM
+#endif
+#if CONFIG_UART_YMODEM
 	{"ATSY", fATSY,},	// uart ymodem upgrade
 #endif
 #if SUPPORT_MP_MODE
@@ -1105,9 +1240,6 @@ log_item_t at_sys_items[] = {
 #endif
 #endif
 	{"ATSG", fATSG,},	// GPIO control
-#if CONFIG_UART_XMODEM
-	{"ATSX", fATSX,},	// uart xmodem upgrade
-#endif
 #endif // end of #if ATCMD_VER == ATVER_1
 
 // Following commands exist in two versions

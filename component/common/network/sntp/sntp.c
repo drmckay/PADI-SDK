@@ -185,6 +185,24 @@ struct tm sntp_gen_system_time(int timezone)
 
 	return current_tm;
 }
+
+/**
+ * SNTP Change time server address, must be called before @ref sntp_init
+ */
+static char* sntp_server_addresses[];
+int sntp_set_timeserver( unsigned int ntp_server_addr )
+{
+	static char str_addr[16];
+	ip_addr_t server_addr;
+
+	server_addr.addr = htonl ( ntp_server_addr );
+	memset(str_addr, 0, sizeof(str_addr));
+	if(ipaddr_ntoa_r(&server_addr, str_addr, 16) == NULL)
+		return -1;
+	sntp_server_addresses[0] = str_addr;
+
+	return 0;
+}
 /* End of Realtek added */
 
 /** SNTP macro to change system time and/or the update the RTC clock */

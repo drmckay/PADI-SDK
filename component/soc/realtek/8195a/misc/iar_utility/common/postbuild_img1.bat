@@ -17,8 +17,9 @@ for /f "delims=" %%i in ('cmd /c "%tooldir%\grep IMAGE1 Debug/Exe/bootloader.map
 ::echo %ram2_end% >> tmp.txt
 ::echo %ram3_end% >> tmp.txt
 
-%tooldir%\objcopy -j "A2 rw" -Obinary Debug/Exe/bootloader.axf Debug/Exe/ram_1.bin
-::%tooldir%\objcopy -j "A3 rw" -Obinary Debug/Exe/bootloader.axf Debug/Exe/sdram.bin
+for /f %%i in ('cmd /c "%tooldir%\readelf -S Debug/Exe/bootloader.axf | %tooldir%\grep 10000000 | %tooldir%\cut -c 8-10"') do set sectname_img1=%%i
+::echo %sectname_img1% rw > tmp.txt
+%tooldir%\objcopy -j "%sectname_img1% rw" -Obinary Debug/Exe/bootloader.axf Debug/Exe/ram_1.bin
 
 %tooldir%\pick %ram1_start% %ram1_end% Debug\Exe\ram_1.bin Debug\Exe\ram_1.p.bin head 0xb000
 %tooldir%\pick %ram1_start% %ram1_end% Debug\Exe\ram_1.bin Debug\Exe\ram_1.r.bin raw

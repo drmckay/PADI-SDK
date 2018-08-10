@@ -435,6 +435,7 @@ int spi_busy (spi_t *obj)
     return (int)pHalSsiOp->HalSsiBusy(pHalSsiAdaptor);
 }
 
+//Discard data in the rx fifo, SPI bus can observe these data
 void spi_flush_rx_fifo (spi_t *obj)
 {
     PHAL_SSI_ADAPTOR pHalSsiAdaptor;
@@ -451,6 +452,23 @@ void spi_flush_rx_fifo (spi_t *obj)
             pHalSsiOp->HalSsiRead(pHalSsiAdaptor);
         }
     }
+}
+
+//This function is only for the slave device to flush tx fifo
+//It will discard all data in both tx fifo and rx fifo, then reset the state of slave tx. 
+//Data in the tx & rx fifo will be dropped without being able to be observed from SPI bus
+void spi_slave_flush_fifo(spi_t *obj)
+{
+    PHAL_SSI_ADAPTOR pHalSsiAdaptor;
+    u8 index;
+
+    pHalSsiAdaptor = &obj->spi_adp;
+    index = pHalSsiAdaptor->Index;
+    if(index != 0){
+        DBG_SSI_ERR("spi %x is not a slave\n", index);
+    }
+    HalSsiClearFIFO(pHalSsiAdaptor);
+    obj->state &= ~SPI_STATE_TX_BUSY;
 }
 
 // Slave mode read a sequence of data by interrupt mode
@@ -647,6 +665,64 @@ int32_t spi_slave_read_stream_timeout(spi_t *obj, char *rx_buffer, uint32_t leng
     else {
         return (-ret);
     }
+}
+
+int32_t spi_slave_read_stream_terminate(spi_t *obj, char *rx_buffer, uint32_t length)
+{
+    PHAL_SSI_ADAPTOR pHalSsiAdaptor;
+    PHAL_SSI_OP pHalSsiOp;
+    volatile u8 csterminate;
+    int ret;
+    volatile u32 spistate;
+
+    csterminate = 0;
+    if (obj->state & SPI_STATE_RX_BUSY) {
+        DBG_SSI_WARN("spi_slave_read_stream_dma: state(0x%x) is not ready\r\n", 
+            obj->state);
+        return HAL_BUSY;
+    }
+    
+    pHalSsiAdaptor = &obj->spi_adp;
+    pHalSsiOp = &obj->spi_op;
+    
+
+    obj->state |= SPI_STATE_RX_BUSY;
+    HalSsiEnterCritical(pHalSsiAdaptor);
+    if ((ret=pHalSsiOp->HalSsiReadInterrupt(pHalSsiAdaptor, rx_buffer, length)) != HAL_OK) {
+        obj->state &= ~SPI_STATE_RX_BUSY;
+    }
+    HalSsiExitCritical(pHalSsiAdaptor);
+
+
+    while(obj->state & SPI_STATE_RX_BUSY){
+        spistate = pHalSsiOp->HalSsiGetStatus(pHalSsiAdaptor);
+        while((spistate & 0x1) == 1){
+            if((obj->state & SPI_STATE_RX_BUSY) == 0){   
+                csterminate = 0;
+                break;
+            }   
+            spistate = pHalSsiOp->HalSsiGetStatus(pHalSsiAdaptor);
+            if((spistate & 0x1) == 0){
+                ret = HalSsiStopRecv(pHalSsiAdaptor); 
+                goto EndOfCS;
+            }
+        }
+    }
+EndOfCS:
+    if((obj->state & SPI_STATE_RX_BUSY) != 0){ 
+        csterminate = 1;
+        obj->state &= ~ SPI_STATE_RX_BUSY;
+    }
+
+    if ((pHalSsiAdaptor->DataFrameSize+1) > 8){
+        pHalSsiAdaptor->RxLength <<= 1;
+    }    
+    
+    if(csterminate == 1)
+        return (length - pHalSsiAdaptor->RxLength);
+    else
+        return length;
+
 }
 
 // Bus Idle: Real TX done, TX FIFO empty and bus shift all data out already
@@ -964,5 +1040,66 @@ int32_t spi_slave_read_stream_dma_timeout(spi_t *obj, char *rx_buffer, uint32_t 
         return (-ret);
     }
 }
+
+int32_t spi_slave_read_stream_dma_terminate(spi_t *obj, char *rx_buffer, uint32_t length)
+{
+    PHAL_SSI_ADAPTOR pHalSsiAdaptor;
+    PHAL_SSI_OP pHalSsiOp;
+    volatile u8 csterminate;
+    int ret;
+    volatile u32 spistate;
+
+    csterminate = 0;
+    if (obj->state & SPI_STATE_RX_BUSY) {
+        DBG_SSI_WARN("spi_slave_read_stream_dma: state(0x%x) is not ready\r\n", 
+            obj->state);
+        return HAL_BUSY;
+    }
+    
+    pHalSsiAdaptor = &obj->spi_adp;
+    pHalSsiOp = &obj->spi_op;
+    
+    if ((obj->dma_en & SPI_DMA_RX_EN)==0) {
+        if (HAL_OK == HalSsiRxGdmaInit(pHalSsiOp, pHalSsiAdaptor)) {
+            obj->dma_en |= SPI_DMA_RX_EN;
+        }
+        else {
+            return HAL_BUSY;
+        }
+    }
+
+
+    obj->state |= SPI_STATE_RX_BUSY;
+    HalSsiEnterCritical(pHalSsiAdaptor);
+    ret = HalSsiDmaRecv(pHalSsiAdaptor, (u8 *) rx_buffer, length);    
+    HalSsiExitCritical(pHalSsiAdaptor);
+
+    while(obj->state & SPI_STATE_RX_BUSY){
+        spistate = pHalSsiOp->HalSsiGetStatus(pHalSsiAdaptor);
+        while((spistate & 0x1) == 1){
+            if((obj->state & SPI_STATE_RX_BUSY) == 0){   
+                csterminate = 0;
+                break;
+            }   
+            spistate = pHalSsiOp->HalSsiGetStatus(pHalSsiAdaptor);
+            if((spistate & 0x1) == 0){
+                ret = HalSsiStopRecv(pHalSsiAdaptor); 
+                goto EndOfDMACS;
+            }
+        }
+    }
+EndOfDMACS:
+    if((obj->state & SPI_STATE_RX_BUSY) != 0){ 
+        csterminate = 1;
+        obj->state &= ~ SPI_STATE_RX_BUSY;
+    }
+    
+    if(csterminate == 1)
+        return (length - pHalSsiAdaptor->RxLength);
+    else
+        return length;
+
+}
+
 
 #endif  // end of "#ifdef CONFIG_GDMA_EN"
